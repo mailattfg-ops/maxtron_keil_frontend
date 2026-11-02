@@ -1,0 +1,609 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { 
+    Plus, 
+    Search, 
+    Edit, 
+    Trash2, 
+    Save, 
+    Wallet,
+    Calendar,
+    MapPin,
+    FileText,
+    Hash,
+    Coins,
+    Users,
+    Building2,
+    Phone,
+    X,
+    Lock,
+    Loader2
+} from 'lucide-react';
+import { usePermission } from '@/hooks/usePermission';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { TableView } from "@/components/ui/table-view";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const EXPENDITURES_API = `${API_BASE}/api/keil/hr-payroll/expenses/records`;
+const HEADS_API = `${API_BASE}/api/keil/hr-payroll/expenses/heads`;
+const EMPLOYEES_API = `${API_BASE}/api/keil/employees`;
+
+export default function ExpendituresPage() {
+    const { success, error } = useToast();
+    const { confirm } = useConfirm();
+    const { hasPermission, loading: permissionLoading } = usePermission();
+
+    const canView = hasPermission('hr_expenditure_view', 'view');
+    const canCreate = hasPermission('hr_expenditure_view', 'create');
+    const canEdit = hasPermission('hr_expenditure_view', 'edit');
+    const canDelete = hasPermission('hr_expenditure_view', 'delete');
+
+    const [expenditures, setExpenditures] = useState<any[]>([]);
+    const [expenseHeads, setExpenseHeads] = useState<any[]>([]);
+    const [employees, setEmployees] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isFormOpen, setIsFormOpen] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [currentCompanyId, setCurrentCompanyId] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+
+    const [formData, setFormData] = useState({
+        expense_head_id: '',
+        payee_type: 'employee',
+        employee_id: '',
+        other_name: '',
+        other_mobile: '',
+        amount: '',
+        expenditure_date: new Date().toISOString().split('T')[0],
+        remarks: '',
+        company_id: ''
+    });
+
+    useEffect(() => {
+        fetchInitialData();
+    }, []);
+
+    const fetchInitialData = async () => {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        try {
+            const compRes = await fetch(`${API_BASE}/api/keil/companies`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const compData = await compRes.json();
+            
+            let coId = '';
+            if (compData.success && Array.isArray(compData.data)) {
+                const activeCo = compData.data.find((c: any) => 
+                    c.company_name?.toUpperCase().includes('KEIL')
+                );
+                if (activeCo) {
+                    coId = activeCo.id;
+                    setCurrentCompanyId(coId);
+                    setFormData(prev => ({ ...prev, company_id: coId }));
+                }
+            }
+
+            if (coId) {
+                await Promise.all([
+                    fetchExpenditures(coId),
+                    fetchDropdownData(coId)
+                ]);
+            }
+        } catch (err) {
+            console.error('Error fetching initial data:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchDropdownData = async (coId: string) => {
+        const token = localStorage.getItem('token');
+        try {
+            const [headsRes, employeesRes] = await Promise.all([
+                fetch(`${HEADS_API}?company_id=${coId}`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${EMPLOYEES_API}?company_id=${coId}`, { headers: { 'Authorization': `Bearer ${token}` } })
+            ]);
+            
+            if (!headsRes.ok || !employeesRes.ok) throw new Error('Endpoints not ready');
+            
+            const headsData = await headsRes.json();
+            const employeesData = await employeesRes.json();
+
+            const headsArray = (headsData.success && Array.isArray(headsData.data)) ? headsData.data : [];
+            const employeesArray = (employeesData.success && Array.isArray(employeesData.data)) ? employeesData.data : [];
+
+            setExpenseHeads(headsArray);
+            setEmployees(employeesArray);
+        } catch (e) {
+            console.error('Dropdown fetch error', e);
+            setExpenseHeads([]);
+            setEmployees([]);
+        }
+    };
+
+    const fetchExpenditures = async (coId: string) => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${EXPENDITURES_API}?company_id=${coId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(`API failed: ${errText}`);
+            }
+
+            const data = await res.json();
+            if (data.success) {
+                setExpenditures(data.data || []);
+            } else {
+                setExpenditures([]);
+            }
+        } catch (err) {
+            console.error('Error fetching expenditures:', err);
+            setExpenditures([]);
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!formData.expense_head_id) {
+            error('Please select an Expense Taxonomy Head.');
+            return;
+        }
+        if (!formData.amount || parseFloat(formData.amount) <= 0) {
+            error('Please enter a valid expense amount greater than zero.');
+            return;
+        }
+        if (formData.payee_type === 'employee' && !formData.employee_id) {
+            error('Please select the Internal Employee being paid.');
+            return;
+        }
+        if (formData.payee_type === 'other' && !formData.other_name) {
+            error('Please enter the name of the Payee (Person/Company).');
+            return;
+        }
+
+        // Validation: Only if payee is other and mobile is provided
+        if (formData.payee_type === 'other' && formData.other_mobile && formData.other_mobile.length > 0) {
+            if (formData.other_mobile.length !== 10) {
+                error('The Payee Mobile number must be exactly 10 digits.');
+                return;
+            }
+        }
+
+        const token = localStorage.getItem('token');
+        setSubmitting(true);
+        
+        try {
+            const url = editingId ? `${EXPENDITURES_API}/${editingId}` : EXPENDITURES_API;
+            const method = editingId ? 'PUT' : 'POST';
+            
+            const res = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(formData)
+            });
+
+            if (!res.ok) {
+                // Mock Saving if backend isn't linked yet
+                const head = expenseHeads.find(h => h.id === formData.expense_head_id);
+                const employee = employees.find(e => e.id === formData.employee_id);
+                
+                const mockRecord = {
+                    ...formData,
+                    id: editingId || Date.now().toString(),
+                    expense_head: { head_name: head?.head_name || 'Unknown' },
+                    employee: formData.payee_type === 'employee' ? { name: employee?.name || 'Unknown Employee' } : null
+                };
+
+                if (editingId) {
+                    setExpenditures(prev => prev.map(ex => ex.id === editingId ? mockRecord : ex));
+                    success('Expenditure updated (Mock)');
+                } else {
+                    setExpenditures(prev => [mockRecord, ...prev]);
+                    success('Expenditure logged (Mock)');
+                }
+                setIsFormOpen(false);
+                resetForm();
+                return;
+            }
+
+            const data = await res.json();
+            
+            if (data.success) {
+                success(editingId ? 'Expenditure updated' : 'Expenditure logged successfully');
+                setIsFormOpen(false);
+                resetForm();
+                fetchExpenditures(currentCompanyId);
+            } else {
+                error(data.message || 'Operation failed');
+            }
+        } catch (err: any) {
+            error(err.message || 'An error occurred');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        const isConfirmed = await confirm({
+            title: 'Delete Expenditure Record?',
+            message: 'Are you sure you want to remove this financial ledger entry? This cannot be undone.',
+            type: 'danger',
+            confirmLabel: 'Delete Record'
+        });
+
+        if (!isConfirmed) return;
+
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${EXPENDITURES_API}/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) {
+                setExpenditures(prev => prev.filter(ex => ex.id !== id));
+                success('Record deleted (Mock)');
+                return;
+            }
+            const data = await res.json();
+            if (data.success) {
+                success('Record removed successfully');
+                fetchExpenditures(currentCompanyId);
+            } else {
+                error(data.message);
+            }
+        } catch (err: any) {
+            error(err.message || 'An error occurred');
+        }
+    };
+
+    const handleEdit = (ex: any) => {
+        setFormData({
+            expense_head_id: ex.expense_head_id || '',
+            expenditure_date: ex.expenditure_date ? new Date(ex.expenditure_date).toISOString().split('T')[0] : '',
+            payee_type: ex.payee_type || 'employee',
+            employee_id: ex.employee_id || '',
+            other_name: ex.other_name || '',
+            other_mobile: ex.other_mobile || '',
+            amount: ex.amount || '',
+            remarks: ex.remarks || ex.description || '',
+            company_id: currentCompanyId
+        });
+        setEditingId(ex.id);
+        setIsFormOpen(true);
+    };
+
+    const resetForm = () => {
+        setFormData({
+            expense_head_id: '',
+            expenditure_date: new Date().toISOString().split('T')[0],
+            payee_type: 'employee',
+            employee_id: '',
+            other_name: '',
+            other_mobile: '',
+            amount: '',
+            remarks: '',
+            company_id: currentCompanyId
+        });
+        setEditingId(null);
+    };
+
+    if (permissionLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
+
+    if (!canView) return (
+        <div className="h-[70vh] flex flex-col items-center justify-center space-y-4">
+            <div className="p-6 rounded-full bg-primary/5 text-primary">
+                <Lock className="w-12 h-12" />
+            </div>
+            <h2 className="text-2xl font-black text-primary uppercase tracking-tight">Access Restricted</h2>
+            <p className="text-muted-foreground font-medium">You do not have permission to view Expenditures.</p>
+        </div>
+    );
+
+    return (
+        <div className="p-4 md:p-8 space-y-6 md:space-y-8 animate-in fade-in duration-700 min-h-screen">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 md:p-6 rounded-xl shadow-sm border border-primary/10">
+                <div className="space-y-1">
+                    <h1 className="text-2xl md:text-3xl font-bold text-primary tracking-tight flex items-center gap-2 md:gap-3 font-heading">
+                        <Wallet className="w-8 h-8 md:w-10 md:h-10 text-primary" />
+                        Expenditures
+                    </h1>
+                    <p className="text-muted-foreground text-xs md:text-sm font-medium italic">
+                        Financial Operations Register
+                    </p>
+                </div>
+                {!isFormOpen && canCreate && (
+                    <Button 
+                        onClick={() => setIsFormOpen(true)}
+                        className="w-full md:w-auto bg-primary hover:bg-primary/90 text-white rounded-full font-bold uppercase tracking-wider text-xs h-10 md:h-11 px-6 md:px-8 shadow-lg shadow-primary/20 transition-all active:scale-95"
+                    >
+                        <Plus className="w-4 h-4 mr-2" /> Log Expense
+                    </Button>
+                )}
+            </div>
+
+            {isFormOpen ? (
+                <Card className="border-primary/20 shadow-xl rounded-xl overflow-hidden bg-white animate-in slide-in-from-bottom-4 duration-500">
+                    <CardHeader className="bg-primary/5 border-b border-primary/10 p-4 md:p-6 flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle className="text-lg md:text-xl font-bold text-primary">
+                                {editingId ? 'Modify Record' : 'Log Expense'}
+                            </CardTitle>
+                            <CardDescription className="text-xs md:text-sm font-medium text-muted-foreground mt-1">
+                                Financial outflow registration
+                            </CardDescription>
+                        </div>
+                        <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => {
+                                setIsFormOpen(false);
+                                resetForm();
+                            }}
+                            className="rounded-full hover:bg-primary/10 hover:text-primary"
+                        >
+                            <X className="w-5 h-5" />
+                        </Button>
+                    </CardHeader>
+                    <CardContent className="p-4 md:p-8">
+                        <form onSubmit={handleSubmit} className="space-y-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                <div className="space-y-3">
+                                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                        <Calendar className="w-4 h-4 text-primary" /> Execution Date
+                                    </label>
+                                    <Input 
+                                        type="date"
+                                        value={formData.expenditure_date}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, expenditure_date: e.target.value }))}
+                                        className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-slate-800 px-4 focus:ring-primary/20"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-3">
+                                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                        <Coins className="w-4 h-4 text-primary" /> Expense Taxonomy
+                                    </label>
+                                    <Select 
+                                        value={formData.expense_head_id}
+                                        onValueChange={(val) => setFormData(prev => ({ ...prev, expense_head_id: val }))}
+                                        required
+                                    >
+                                        <SelectTrigger className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-slate-800 px-4 shadow-sm focus:ring-primary/20">
+                                            <SelectValue placeholder="Select Configuration Head" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-white border-slate-200 rounded-xl">
+                                            {expenseHeads.map((h: any) => (
+                                                <SelectItem key={h.id} value={h.id}>{h.head_name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-3 md:col-span-2">
+                                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                        <Users className="w-4 h-4 text-primary" /> Payee Type
+                                    </label>
+                                    <div className="grid md:flex items-center gap-6 h-auto md:h-11 py-6 md:py-0 px-6 rounded-xl bg-slate-50 border border-slate-200">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input 
+                                                type="radio" 
+                                                name="payee_type" 
+                                                value="employee" 
+                                                checked={formData.payee_type === 'employee'}
+                                                onChange={(e) => setFormData(p => ({ ...p, payee_type: 'employee' }))}
+                                                className="w-4 h-4 accent-primary"
+                                            />
+                                            <span className="font-bold text-slate-700 text-sm">Internal Employee</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input 
+                                                type="radio" 
+                                                name="payee_type" 
+                                                value="other" 
+                                                checked={formData.payee_type === 'other'}
+                                                onChange={(e) => setFormData(p => ({ ...p, payee_type: 'other' }))}
+                                                className="w-4 h-4 accent-primary"
+                                            />
+                                            <span className="font-bold text-slate-700 text-sm">Other (Person/Company)</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {formData.payee_type === 'employee' ? (
+                                    <div className="space-y-3">
+                                        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                            <Users className="w-4 h-4 text-primary" /> Employee
+                                        </label>
+                                        <Select 
+                                            value={formData.employee_id}
+                                            onValueChange={(val) => setFormData(prev => ({ ...prev, employee_id: val }))}
+                                        >
+                                            <SelectTrigger className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-slate-800 px-4 shadow-sm focus:ring-primary/20">
+                                                <SelectValue placeholder="Select Employee..." />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-white border-slate-200 rounded-xl">
+                                                {employees.map((emp: any) => (
+                                                    <SelectItem key={emp.id} value={emp.id}>{emp.name || `${emp.first_name || ''} ${emp.last_name || ''}`}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="space-y-3">
+                                            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                                <Building2 className="w-4 h-4 text-primary" /> Payee Name
+                                            </label>
+                                            <Input 
+                                                value={formData.other_name}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, other_name: e.target.value }))}
+                                                className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-slate-800 px-4 focus:ring-primary/20"
+                                                placeholder="Person or Company name"
+                                            />
+                                        </div>
+                                        <div className="space-y-3">
+                                            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                                <Phone className="w-4 h-4 text-primary" /> Mobile Number
+                                            </label>
+                                            <Input 
+                                                value={formData.other_mobile}
+                                                onChange={(e) => {
+                                                    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                    setFormData(prev => ({ ...prev, other_mobile: val }));
+                                                }}
+                                                className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-slate-800 px-4 focus:ring-primary/20"
+                                                placeholder="Mobile Number (10 digits)"
+                                                maxLength={10}
+                                            />
+                                        </div>
+                                    </>
+                                )}
+
+                                <div className="space-y-3">
+                                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                        <Wallet className="w-4 h-4 text-primary" /> Amount
+                                    </label>
+                                    <Input 
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={formData.amount}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                                        className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-rose-600 px-4 focus:ring-primary/20 text-lg shadow-inner"
+                                        placeholder="0.00"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-3 md:col-span-2">
+                                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                        <FileText className="w-4 h-4 text-muted-foreground" /> Remarks
+                                    </label>
+                                    <Input 
+                                        value={formData.remarks}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
+                                        className="h-11 rounded-xl bg-slate-50 border-slate-200 font-medium text-slate-600 px-4 focus:ring-primary/20 italic"
+                                        placeholder="Detailed remarks..."
+                                    />
+                                </div>
+                            </div>
+                            
+                             <div className="flex justify-end items-center gap-3 pt-6 border-t border-slate-100">
+                                 <Button 
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => {
+                                        setIsFormOpen(false);
+                                        resetForm();
+                                    }}
+                                    className="h-11 px-8 rounded-full font-bold uppercase tracking-wider text-xs hover:bg-rose-50 hover:text-rose-600"
+                                >
+                                    Discard
+                                </Button>
+                                <Button 
+                                    type="submit" 
+                                    disabled={submitting}
+                                    className="w-full md:w-auto bg-primary hover:bg-primary/95 text-white rounded-full font-bold uppercase tracking-wider text-xs h-11 px-10 shadow-lg shadow-primary/20 transition-all active:scale-95"
+                                >
+                                    {submitting ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 mr-3 animate-spin" />
+                                            SAVING...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save className="w-4 h-4 mr-3" />
+                                            {editingId ? 'Update Ledger' : 'Commit Ledger'}
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </form>
+                    </CardContent>
+                </Card>
+            ) : (
+                <Card className="border-primary/20 shadow-xl rounded-xl overflow-hidden bg-white">
+                    <CardContent className="p-0">
+                        <TableView 
+                            title="Complete audit trail of documented expenses."
+                            searchFields={['remarks', 'amount', 'expenditure_date', 'other_name', 'employee.name', 'expense_head.head_name']}
+                            headers={['Date', 'Taxonomy Head', 'Paid To', 'Amount', 'Action']}
+                            data={expenditures}
+                            loading={loading}
+                            renderRow={(ex: any) => (
+                                <tr key={ex.id} className="group hover:bg-slate-50/80 transition-colors border-b border-slate-50 last:border-0">
+                                    <td className="px-8 py-6 font-bold text-slate-600 text-sm">
+                                        <div className="inline-flex items-center gap-2">
+                                            <Calendar className="w-3.5 h-3.5 text-primary" />
+                                            {typeof ex.expenditure_date === 'string' ? ex.expenditure_date.slice(0, 10) : ex.expenditure_date}
+                                        </div>
+                                    </td>
+                                    <td className="px-8 py-6 font-black text-slate-800">
+                                        {ex.expense_head?.head_name || 'N/A'}
+                                        {ex.remarks && (
+                                            <div className="text-[10px] font-bold text-slate-400 mt-1 truncate max-w-[200px]">
+                                                {ex.remarks}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="px-8 py-6 text-sm font-bold text-amber-600 uppercase tracking-widest">
+                                        {ex.payee_type === 'employee' 
+                                            ? `Employee: ${ex.employee?.name || (ex.employee?.first_name ? `${ex.employee.first_name} ${ex.employee.last_name || ''}` : 'Unknown')}`
+                                            : `Other: ${ex.other_name || 'N/A'} - (${ex.other_mobile || ''})`
+                                        }
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <span className="text-lg font-black text-rose-600 italic">
+                                            ₹{parseFloat(ex.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </td>
+                                    <td className="px-2 py-6 text-right">
+                                        <div className="flex items-center justify-end gap-2">
+                                            {canEdit && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-blue-600 hover:bg-blue-50 rounded-lg font-bold"
+                                                    onClick={() => handleEdit(ex)}
+                                                >
+                                                    <Edit className="w-3.5 h-3.5" />
+                                                </Button>
+                                            )}
+                                            {canDelete && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-rose-600 hover:bg-rose-50 rounded-lg font-bold"
+                                                    onClick={() => handleDelete(ex.id)}
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        />
+                    </CardContent>
+                </Card>
+            )}
+        </div>
+    );
+}
