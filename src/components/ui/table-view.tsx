@@ -383,13 +383,23 @@ export function TableView<T>({
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-primary/5">
+            <tbody className="divide-y divide-primary/5" aria-busy={loading}>
               {loading ? (
-                <tr>
-                  <td colSpan={headers.length + (isSelectionEnabled ? 1 : 0)} className="px-6 py-12 text-center text-muted-foreground animate-pulse">
-                    Syncing data...
-                  </td>
-                </tr>
+                // Placeholder rows in the table's own shape while data loads.
+                Array.from({ length: 6 }, (_, row) => (
+                  <tr key={`skeleton-${row}`}>
+                    {Array.from({ length: headers.length + (isSelectionEnabled ? 1 : 0) }, (_, col) => (
+                      <td key={col} className="px-6 py-4">
+                        {row === 0 && col === 0 && <span className="sr-only">Loading data…</span>}
+                        <div
+                          aria-hidden="true"
+                          className="h-4 rounded bg-muted animate-pulse"
+                          style={{ width: `${55 + ((row + col) % 3) * 15}%` }}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))
               ) : currentData.length === 0 ? (
                 <tr>
                   <td colSpan={headers.length + (isSelectionEnabled ? 1 : 0)} className="px-6 py-12 text-center text-muted-foreground font-medium italic">
