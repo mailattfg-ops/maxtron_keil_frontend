@@ -41,7 +41,7 @@ import { writeSalaryFrontSheet, readSalaryFrontSheet, MONTH_ABBR } from '@/utils
 
 export default function KeilPayrollPage() {
     const pathname = usePathname();
-    const activeEntity = pathname?.startsWith('/keil') ? 'keil' : 'maxtron';
+    const activeEntity = 'keil';
     const activeTenant = activeEntity.toUpperCase();
     const { hasPermission, isAdmin, loading: permissionLoading } = usePermission();
 

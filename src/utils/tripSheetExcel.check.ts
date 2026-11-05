@@ -1,5 +1,5 @@
 /**
- * Self-check for the trip sheet export. From maxtron-frontend:
+ * Self-check for the trip sheet export. From the frontend folder:
  *
  *   npx tsx src/utils/tripSheetExcel.check.ts
  *

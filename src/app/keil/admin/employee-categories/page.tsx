@@ -30,8 +30,8 @@ export default function EmployeeCategoriesPage() {
     const canDelete = hasPermission('admin_permissions', 'delete');
 
     const pathname = usePathname();
-    const activeEntity = pathname?.startsWith('/keil') ? 'keil' : 'maxtron';
-    const activeTenant = pathname?.startsWith('/keil') ? 'KEIL' : 'MAXTRON';
+    const activeEntity = 'keil';
+    const activeTenant = 'KEIL';
     const CATEGORIES_API = `${API_BASE}/api/${activeEntity}/categories`;
     
     const [categories, setCategories] = useState<any[]>([]);
@@ -236,7 +236,7 @@ export default function EmployeeCategoriesPage() {
 
             <TableView
                 title="Available Classifications"
-                description="Standard groupings used across both Maxtron and Keil operations."
+                description="Standard groupings used across KEIL operations."
                 headers={['Classification Name', 'System Key', 'Actions']}
                 data={categories}
                 loading={loading}

@@ -1,5 +1,5 @@
 /**
- * Self-check for the KEIL salary front sheet. From maxtron-frontend:
+ * Self-check for the KEIL salary front sheet. From the frontend folder:
  *   npx tsx src/utils/payrollSheet.check.ts
  * Set SALARY_FILE=<xlsx> (and EMPLOYEES=<json>) to also read a real sheet;
  * set OUT_DIR=<folder> to write the exported sample.

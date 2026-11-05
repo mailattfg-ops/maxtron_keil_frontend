@@ -189,15 +189,21 @@ export default function RouteCollectionReportPage() {
             worksheet.mergeCells(`${col}1:${col}2`);
         });
 
-        // Add Data Rows
-        for (const summaryBatch of batches) {
-            // Fetch full details for each batch to get accurate entries for old data
-            const detailRes = await fetch(`${COLLECTION_API}/${summaryBatch.id}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            const detailData = await detailRes.json();
-            const batch = detailData.success ? detailData.data : summaryBatch;
+        // Fetch full details for each batch to get accurate entries for old data.
+        // Ten at a time: one by one is slow, and all at once overloads the API on a long date range.
+        const detailedBatches: any[] = [];
+        for (let i = 0; i < batches.length; i += 10) {
+            detailedBatches.push(...await Promise.all(batches.slice(i, i + 10).map(async (summaryBatch: any) => {
+                const detailRes = await fetch(`${COLLECTION_API}/${summaryBatch.id}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const detailData = await detailRes.json();
+                return detailData.success ? detailData.data : summaryBatch;
+            })));
+        }
 
+        // Add Data Rows
+        for (const batch of detailedBatches) {
             // Recalculate breakdown using the provided logic to ensure "correct data"
             const visitedList = (batch.entries || []).filter((e: any) => e.is_visited);
             

@@ -1,5 +1,5 @@
 /**
- * Self-check for reading the diesel register workbook. From maxtron-frontend:
+ * Self-check for reading the diesel register workbook. From the frontend folder:
  *
  *   npx tsx src/utils/fuelRegisterImport.check.ts
  *

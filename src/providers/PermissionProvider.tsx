@@ -21,7 +21,7 @@ export const PermissionProvider = ({ children }: { children: React.ReactNode }) 
     const [permissions, setPermissions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const pathname = usePathname();
-    const activeEntity = pathname?.startsWith('/keil') ? 'keil' : 'maxtron';
+    const activeEntity = 'keil';
 
     const fetchUserPermissions = async () => {
         const token = localStorage.getItem('token');
@@ -94,7 +94,7 @@ export const PermissionProvider = ({ children }: { children: React.ReactNode }) 
         if (!storedUser) return false;
         const user = JSON.parse(storedUser);
         
-        const isAdmin = user?.role_name?.toLowerCase() === 'admin' || user?.email?.toLowerCase() === 'admin@maxtron.com';
+        const isAdmin = user?.role_name?.toLowerCase() === 'admin' || user?.email?.toLowerCase() === 'admin@keil.com';
         if (isAdmin) return true;
 
 

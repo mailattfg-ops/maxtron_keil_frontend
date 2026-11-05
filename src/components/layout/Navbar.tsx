@@ -25,11 +25,8 @@ interface NavbarProps {
   onMenuToggle?: () => void;
 }
 
-/** The signed-in user's company as it is written on its documents. */
-const companyDisplayName = (user: any) => {
-  const name = String(user?.company_name || user?.company?.company_name || '').trim();
-  return name.toUpperCase() === 'MAXTRON' ? 'MAXTRON ASSOCIATES' : (name || 'N/A');
-};
+/** The signed-in user's company. */
+const companyDisplayName = (user: any) => String(user?.company_name || user?.company?.company_name || '').trim() || 'N/A';
 
 export const Navbar = ({ user, handleLogout, onMenuToggle }: NavbarProps) => {
   const { theme, setTheme } = useTheme();
@@ -120,7 +117,7 @@ export const Navbar = ({ user, handleLogout, onMenuToggle }: NavbarProps) => {
               </Avatar>
               <div className="min-w-0 flex-1">
                 <h3 className="font-bold text-base text-slate-900 truncate">{user?.name || 'Administrator'}</h3>
-                <p className="text-xs text-muted-foreground truncate">{user?.email || 'admin@maxtron.com'}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email || 'admin@keil.com'}</p>
                 <div className="flex items-center gap-2 mt-1.5">
                   <span className="bg-primary/10 text-primary text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
                     {user?.user_types?.name || user?.role_name || 'System Admin'}

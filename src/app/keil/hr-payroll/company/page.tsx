@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/toast';
 
 export default function CompanyInformationPage() {
   const pathname = usePathname();
-  const activeEntity = pathname?.startsWith('/keil') ? 'keil' : 'maxtron';
+  const activeEntity = 'keil';
   const activeTenant = activeEntity.toUpperCase();
   const API_URL = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/${activeEntity}/companies`;
 

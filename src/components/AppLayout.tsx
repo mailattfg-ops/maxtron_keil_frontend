@@ -41,7 +41,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   const canShowItem = (allowedRoles?: string[], permissionKey?: string, path?: string) => {
     if (!user) return false;
     const userRole = (user?.role_name || user?.user_types?.name || '').toLowerCase();
-    const isAdmin = userRole === 'admin' || user?.email?.toLowerCase() === 'admin@keil.com' || user?.email?.toLowerCase() === 'admin@maxtron.com';
+    const isAdmin = userRole === 'admin' || user?.email?.toLowerCase() === 'admin@keil.com';
     if (isAdmin) return true;
 
     if (permissionKey) {

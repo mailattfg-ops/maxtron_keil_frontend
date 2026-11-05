@@ -28,7 +28,7 @@ export default function AttendancePage() {
   const canEdit = hasPermission('hr_attendance_view', 'edit');
   const canDelete = hasPermission('hr_attendance_view', 'delete');
   const pathname = usePathname();
-  const activeEntity = pathname?.startsWith('/keil') ? 'keil' : 'maxtron';
+  const activeEntity = 'keil';
   const activeTenant = activeEntity.toUpperCase();
 
   const [user, setUser] = useState<any>(null);
@@ -40,7 +40,7 @@ export default function AttendancePage() {
     if (storedUser) {
       const userData = JSON.parse(storedUser);
       setUser(userData);
-      setIsAdmin(userData.role_name?.toLowerCase() === 'admin' || userData.email?.toLowerCase() === 'admin@maxtron.com');
+      setIsAdmin(userData.role_name?.toLowerCase() === 'admin' || userData.email?.toLowerCase() === 'admin@keil.com');
       setIsManagement(userData.category?.category_name?.toLowerCase() === 'management');
     }
   }, []);
@@ -122,7 +122,7 @@ export default function AttendancePage() {
     const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
     const user = storedUser ? JSON.parse(storedUser) : null;
-    const isAdmin = user?.role_name?.toLowerCase() === 'admin' || user?.email?.toLowerCase() === 'admin@maxtron.com';
+    const isAdmin = user?.role_name?.toLowerCase() === 'admin' || user?.email?.toLowerCase() === 'admin@keil.com';
     const isManagement = user?.category?.category_name?.toLowerCase() === 'management';
 
     const targetCoId = coId || currentCompanyId;

@@ -18,7 +18,7 @@ export function usePermission() {
 
     const roleName = (user?.role_name || user?.user_types?.name || '').toLowerCase();
     const isMarketing = roleName.includes('marketing');
-    const isAdmin = roleName === 'admin' || user?.email?.toLowerCase() === 'admin@maxtron.com';
+    const isAdmin = roleName === 'admin' || user?.email?.toLowerCase() === 'admin@keil.com';
 
     return { hasPermission, user, loading, isMarketing, isAdmin };
 }

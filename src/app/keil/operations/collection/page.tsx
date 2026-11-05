@@ -125,7 +125,7 @@ export default function DailyCollectionEntryPage() {
             if (eData.success && eData.data?.length > 0) {
                 setEmployees(eData.data || []);
             } else {
-                // Fallback to maxtron pool
+                // Fallback to all employees
                 const mERes = await fetch(`${API_BASE}/api/keil/employees`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -480,12 +480,16 @@ export default function DailyCollectionEntryPage() {
                     return;
                 }
 
-                let slNo = 1;
-                for (const batch of batches) {
+                // One day's batches, loaded together; rows keep the same order.
+                const fullBatches = await Promise.all(batches.map(async (batch: any) => {
                     const fullRes = await fetch(`${COLLECTION_API}/${batch.id}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
-                    const fullData = await fullRes.json();
+                    return fullRes.json();
+                }));
+
+                let slNo = 1;
+                for (const fullData of fullBatches) {
                     if (fullData.success && fullData.data) {
                         const b = fullData.data;
                         const bTotalQty = (Number(b.dc_qty) || 0) + (Number(b.nw_qty) || 0) + (Number(b.rd_qty) || 0);

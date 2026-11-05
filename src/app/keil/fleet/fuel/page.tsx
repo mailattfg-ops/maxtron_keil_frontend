@@ -56,7 +56,6 @@ export default function FuelFillingPage() {
     const isAdmin = Boolean(
         hookIsAdmin || 
         user?.role_name?.toLowerCase() === 'admin' || 
-        user?.email?.toLowerCase() === 'admin@maxtron.com' ||
         user?.email?.toLowerCase() === 'admin@keil.com' ||
         user?.email?.toLowerCase() === 'admin'
     );

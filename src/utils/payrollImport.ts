@@ -1,5 +1,5 @@
 /**
- * Reading cells of a payroll import sheet, shared by the KEIL and Polybag
+ * Reading cells of a payroll import sheet, used by the KEIL
  * payroll pages.
  *
  * Each reader answers null when the cell cannot be read, so the page can list

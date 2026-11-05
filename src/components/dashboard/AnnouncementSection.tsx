@@ -53,14 +53,14 @@ interface Announcement {
 }
 
 interface AnnouncementSectionProps {
-    tenant: 'maxtron' | 'keil';
+    tenant: 'keil';
 }
 
 export function AnnouncementSection({ tenant }: AnnouncementSectionProps) {
     const { user } = usePermission();
     const { success, error, info: toastInfo } = useToast();
     const { confirm } = useConfirm();
-    const isAdmin = user?.role_name?.toLowerCase() === 'admin' || user?.email?.toLowerCase() === 'admin@maxtron.com';
+    const isAdmin = user?.role_name?.toLowerCase() === 'admin' || user?.email?.toLowerCase() === 'admin@keil.com';
 
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [loading, setLoading] = useState(true);

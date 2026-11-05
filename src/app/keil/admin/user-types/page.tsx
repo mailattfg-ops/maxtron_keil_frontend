@@ -12,8 +12,8 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 
 export default function KeilUserTypesPage() {
   const pathname = usePathname();
-  const activeEntity = pathname?.startsWith('/keil') ? 'keil' : 'maxtron';
-  const activeTenant = pathname?.startsWith('/keil') ? 'KEIL' : 'MAXTRON';
+  const activeEntity = 'keil';
+  const activeTenant = 'KEIL';
   const API_URL = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/${activeEntity}/user-types`;
 
   const [userTypes, setUserTypes] = useState<any[]>([]);

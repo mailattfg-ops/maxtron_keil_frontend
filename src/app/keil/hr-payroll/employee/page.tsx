@@ -78,7 +78,6 @@ export default function EmployeeInformationPage() {
       setUser(userData);
       setIsAdmin(
         userData.role_name?.toLowerCase() === 'admin' || 
-        userData.email?.toLowerCase() === 'admin@maxtron.com' ||
         userData.email?.toLowerCase() === 'admin@keil.com'
       );
       setIsManagement(userData.category?.category_name?.toLowerCase() === 'management');
@@ -98,8 +97,8 @@ export default function EmployeeInformationPage() {
   const maxDobDate = eighteenYearsAgo.toISOString().split('T')[0];
   
   const pathname = usePathname();
-  const activeEntity = pathname?.startsWith('/keil') ? 'keil' : 'maxtron';
-  const activeTenant = pathname?.startsWith('/keil') ? 'KEIL' : 'MAXTRON';
+  const activeEntity = 'keil';
+  const activeTenant = 'KEIL';
 
   useEffect(() => {
     fetchCompanies();
@@ -298,7 +297,6 @@ export default function EmployeeInformationPage() {
       const user = storedUser ? JSON.parse(storedUser) : null;
       const isAdminUser = 
         user?.role_name?.toLowerCase() === 'admin' || 
-        user?.email?.toLowerCase() === 'admin@maxtron.com' ||
         user?.email?.toLowerCase() === 'admin@keil.com';
       const isManagementUser = user?.category?.category_name?.toLowerCase() === 'management';
 

@@ -15,7 +15,7 @@ export default function AttendanceReportPage() {
   const canView = hasPermission('hr_attendance_summary_view', 'view');
 
   const pathname = usePathname();
-  const activeEntity = pathname?.startsWith('/keil') ? 'keil' : 'maxtron';
+  const activeEntity = 'keil';
   const activeTenant = activeEntity.toUpperCase();
 
   const ATTENDANCE_API = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/${activeEntity}/attendance`;

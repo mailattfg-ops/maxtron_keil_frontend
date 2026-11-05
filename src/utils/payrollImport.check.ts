@@ -1,5 +1,5 @@
 /**
- * Self-check for the payroll import cell readers. From maxtron-frontend:
+ * Self-check for the payroll import cell readers. From the frontend folder:
  *
  *   npx tsx src/utils/payrollImport.check.ts
  */

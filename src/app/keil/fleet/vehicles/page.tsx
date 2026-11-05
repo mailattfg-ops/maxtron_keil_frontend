@@ -443,7 +443,7 @@ export default function VehicleMasterPage() {
                     <h1 className="text-2xl md:text-3xl font-bold text-primary tracking-tight font-heading flex items-center gap-2">
                         <Truck className="w-8 h-8 md:w-10 md:h-10 text-primary" /> Vehicle Master
                     </h1>
-                    <p className="text-muted-foreground text-xs md:text-sm font-medium">Standardized Fleet Information System (Maxtron-KEIL Unified)</p>
+                    <p className="text-muted-foreground text-xs md:text-sm font-medium">Standardized Fleet Information System</p>
                 </div>
                 <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto">
                     {canCreate && (

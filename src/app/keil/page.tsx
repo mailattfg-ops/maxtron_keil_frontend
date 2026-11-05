@@ -49,10 +49,8 @@ export default function KeilDashboard() {
     // Master dataset states
     const [vehicles, setVehicles] = useState<any[]>([]);
     const [routes, setRoutes] = useState<any[]>([]);
-    const [vehicleLogs, setVehicleLogs] = useState<any[]>([]);
-    const [collections, setCollections] = useState<any[]>([]);
-    const [fuelFillings, setFuelFillings] = useState<any[]>([]);
-    const [repairs, setRepairs] = useState<any[]>([]);
+    // Totals per vehicle / per route, added up by the database. The cards filter these.
+    const [summary, setSummary] = useState<{ km: any[]; collections: any[]; fuel: any[]; repairs: any[] }>({ km: [], collections: [], fuel: [], repairs: [] });
 
     // Filter states for individual summary cards
     const [filterKmVehicle, setFilterKmVehicle] = useState('all');
@@ -87,51 +85,27 @@ export default function KeilDashboard() {
                 const coId = keilCo.id;
                 const today = new Date().toISOString().split('T')[0];
 
-                const [
-                    bRes, 
-                    rRes, 
-                    hRes, 
-                    cTodayRes,
-                    vRes,
-                    logsRes,
-                    allCollectionsRes,
-                    fuelRes,
-                    repairsRes
-                ] = await Promise.all([
-                    fetch(`${API_BASE}/api/keil/operations/branches?company_id=${coId}`, { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => null),
+                const [rRes, vRes, summaryRes] = await Promise.all([
                     fetch(`${API_BASE}/api/keil/operations/routes?company_id=${coId}`, { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => null),
-                    fetch(`${API_BASE}/api/keil/operations/hces?company_id=${coId}`, { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => null),
-                    fetch(`${API_BASE}/api/keil/operations/collections?company_id=${coId}&date=${today}`, { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => null),
                     fetch(`${API_BASE}/api/keil/fleet/vehicles?company_id=${coId}`, { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => null),
-                    fetch(`${API_BASE}/api/keil/fleet/logs?company_id=${coId}`, { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => null),
-                    fetch(`${API_BASE}/api/keil/operations/collections?company_id=${coId}`, { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => null),
-                    fetch(`${API_BASE}/api/keil/fleet/fuel-fillings?company_id=${coId}`, { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => null),
-                    fetch(`${API_BASE}/api/keil/fleet/repairs?company_id=${coId}`, { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => null),
+                    fetch(`${API_BASE}/api/keil/operations/dashboard?company_id=${coId}&date=${today}`, { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => null),
                 ]);
 
-                const bData = bRes ? await bRes.json() : null;
                 const rData = rRes ? await rRes.json() : null;
-                const hData = hRes ? await hRes.json() : null;
-                const cTodayData = cTodayRes ? await cTodayRes.json() : null;
                 const vData = vRes ? await vRes.json() : null;
-                const logsData = logsRes ? await logsRes.json() : null;
-                const allColData = allCollectionsRes ? await allCollectionsRes.json() : null;
-                const fuelData = fuelRes ? await fuelRes.json() : null;
-                const repairsData = repairsRes ? await repairsRes.json() : null;
+                const summaryData = summaryRes ? await summaryRes.json() : null;
+                const totals = summaryData?.success ? summaryData.data : null;
 
                 setStats({
-                    branches: bData?.data?.length || 0,
+                    branches: totals?.branches || 0,
                     routes: rData?.data?.length || 0,
-                    hces: hData?.data?.length || 0,
-                    collectionsToday: cTodayData?.data?.length || 0
+                    hces: totals?.hces || 0,
+                    collectionsToday: totals?.collections_today || 0
                 });
 
                 if (vData?.success && Array.isArray(vData.data)) setVehicles(vData.data);
                 if (rData?.success && Array.isArray(rData.data)) setRoutes(rData.data);
-                if (logsData?.success && Array.isArray(logsData.data)) setVehicleLogs(logsData.data);
-                if (allColData?.success && Array.isArray(allColData.data)) setCollections(allColData.data);
-                if (fuelData?.success && Array.isArray(fuelData.data)) setFuelFillings(fuelData.data);
-                if (repairsData?.success && Array.isArray(repairsData.data)) setRepairs(repairsData.data);
+                if (totals) setSummary({ km: totals.km, collections: totals.collections, fuel: totals.fuel, repairs: totals.repairs });
             }
         } catch (err) {
             console.error('Error fetching dashboard stats:', err);
@@ -143,17 +117,11 @@ export default function KeilDashboard() {
     // 1. Total Running KM (filtered by vehicle)
     const runningKmData = useMemo(() => {
         const filtered = filterKmVehicle === 'all'
-            ? vehicleLogs
-            : vehicleLogs.filter(l => String(l.vehicle_id) === String(filterKmVehicle));
+            ? summary.km
+            : summary.km.filter(l => String(l.vehicle_id) === String(filterKmVehicle));
 
-        const totalKm = filtered.reduce((acc, log) => {
-            const start = parseFloat(log.start_km) || 0;
-            const end = parseFloat(log.end_km) || 0;
-            const dist = end - start;
-            return acc + (dist > 0 ? dist : 0);
-        }, 0);
-
-        const tripCount = filtered.length;
+        const totalKm = filtered.reduce((acc, row) => acc + row.km, 0);
+        const tripCount = filtered.reduce((acc, row) => acc + row.trips, 0);
         const avgKm = tripCount > 0 ? (totalKm / tripCount).toFixed(0) : '0';
 
         const selectedVeh = vehicles.find(v => String(v.id) === String(filterKmVehicle));
@@ -164,29 +132,29 @@ export default function KeilDashboard() {
             avgKm,
             vehicleLabel: selectedVeh ? selectedVeh.registration_number : 'All Fleet'
         };
-    }, [vehicleLogs, filterKmVehicle, vehicles]);
+    }, [summary, filterKmVehicle, vehicles]);
 
     // 2. Collection % (filtered route-wise)
     const collectionRateData = useMemo(() => {
         const filtered = filterCollectionRoute === 'all'
-            ? collections
-            : collections.filter(c => String(c.route_id) === String(filterCollectionRoute));
+            ? summary.collections
+            : summary.collections.filter(c => String(c.route_id) === String(filterCollectionRoute));
 
         let totalAssigned = 0;
         let totalVisited = 0;
         let totalWasteQty = 0;
+        let batchCount = 0;
 
         filtered.forEach(c => {
-            const assigned = (Number(c.assigned_bedded) || 0) + (Number(c.assigned_others) || 0);
-            const visited = (Number(c.visited_bedded) || 0) + (Number(c.visited_others) || 0);
-            totalAssigned += assigned;
-            totalVisited += visited;
-            totalWasteQty += (parseFloat(c.collection_qty) || 0);
+            totalAssigned += c.assigned;
+            totalVisited += c.visited;
+            totalWasteQty += c.waste;
+            batchCount += c.batches;
         });
 
         const percentage = totalAssigned > 0 
             ? Math.round((totalVisited / totalAssigned) * 100) 
-            : (filtered.length > 0 ? 100 : 0);
+            : (batchCount > 0 ? 100 : 0);
 
         const selectedRoute = routes.find(r => String(r.id) === String(filterCollectionRoute));
 
@@ -195,26 +163,27 @@ export default function KeilDashboard() {
             totalVisited,
             totalAssigned,
             totalWasteQty,
-            batchCount: filtered.length,
+            batchCount,
             routeLabel: selectedRoute ? selectedRoute.route_name : 'All Routes'
         };
-    }, [collections, filterCollectionRoute, routes]);
+    }, [summary, filterCollectionRoute, routes]);
 
     // 3. Fuel Consumption (filtered vehicle-wise)
     const fuelConsumptionData = useMemo(() => {
         const filtered = filterFuelVehicle === 'all'
-            ? fuelFillings
-            : fuelFillings.filter(f => String(f.vehicle_id) === String(filterFuelVehicle));
+            ? summary.fuel
+            : summary.fuel.filter(f => String(f.vehicle_id) === String(filterFuelVehicle));
 
         let totalLiters = 0;
         let totalAmount = 0;
+        let refillCount = 0;
 
         filtered.forEach(f => {
-            totalLiters += parseFloat(f.liters) || 0;
-            totalAmount += parseFloat(f.amount) || 0;
+            totalLiters += f.liters;
+            totalAmount += f.amount;
+            refillCount += f.refills;
         });
 
-        const refillCount = filtered.length;
         const avgRate = totalLiters > 0 ? (totalAmount / totalLiters).toFixed(2) : '0.00';
 
         const selectedVeh = vehicles.find(v => String(v.id) === String(filterFuelVehicle));
@@ -226,28 +195,28 @@ export default function KeilDashboard() {
             avgRate,
             vehicleLabel: selectedVeh ? selectedVeh.registration_number : 'All Fleet'
         };
-    }, [fuelFillings, filterFuelVehicle, vehicles]);
+    }, [summary, filterFuelVehicle, vehicles]);
 
     // 4. Vehicle Maintenance (filtered vehicle-wise)
     const maintenanceData = useMemo(() => {
         const filtered = filterMaintenanceVehicle === 'all'
-            ? repairs
-            : repairs.filter(r => String(r.vehicle_id) === String(filterMaintenanceVehicle));
+            ? summary.repairs
+            : summary.repairs.filter(r => String(r.vehicle_id) === String(filterMaintenanceVehicle));
 
         let totalCost = 0;
         let gstCost = 0;
         let onRouteIncidents = 0;
         let inProgressCount = 0;
+        let repairCount = 0;
 
         filtered.forEach(r => {
-            const cost = parseFloat(r.cost) || 0;
-            totalCost += cost;
-            if (r.is_gst_bill) gstCost += cost;
-            if (r.is_on_route) onRouteIncidents += 1;
-            if (r.status && r.status !== 'Completed') inProgressCount += 1;
+            totalCost += r.cost;
+            gstCost += r.gst_cost || 0;
+            onRouteIncidents += r.on_route;
+            inProgressCount += r.in_progress;
+            repairCount += r.repairs;
         });
 
-        const repairCount = filtered.length;
         const avgCost = repairCount > 0 ? (totalCost / repairCount).toFixed(0) : '0';
 
         const selectedVeh = vehicles.find(v => String(v.id) === String(filterMaintenanceVehicle));
@@ -261,7 +230,7 @@ export default function KeilDashboard() {
             avgCost,
             vehicleLabel: selectedVeh ? selectedVeh.registration_number : 'All Fleet'
         };
-    }, [repairs, filterMaintenanceVehicle, vehicles]);
+    }, [summary, filterMaintenanceVehicle, vehicles]);
 
     if (permissionLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
 

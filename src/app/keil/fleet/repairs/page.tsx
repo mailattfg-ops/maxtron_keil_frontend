@@ -136,7 +136,7 @@ export default function VehicleRepairLogPage() {
             if (eData.success) {
                 setEmployees(eData.data || []);
             } else {
-                // Final fallback: try maxtron endpoint just in case staff are shared
+                // Final fallback: all employees
                 const mERes = await fetch(`${API_BASE}/api/keil/employees`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
