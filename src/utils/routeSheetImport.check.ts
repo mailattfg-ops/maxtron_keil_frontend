@@ -1,0 +1,87 @@
+/**
+ * Self-check for reading a route sheet. From the frontend folder:
+ *
+ *   npx tsx src/utils/routeSheetImport.check.ts
+ *
+ * Builds a workbook laid out like the Ernakulam route sheet (a sheet per set
+ * of days, routes side by side as SL NO | HCF NAME | AFF NO blocks under a
+ * title), saves and reloads it as an upload would, and reads it back.
+ */
+import assert from 'assert';
+import ExcelJS from 'exceljs';
+import { readRouteSheet, matchRouteSheet, matchBlock, frequencyOf, codeKey } from './routeSheetImport';
+
+(async () => {
+    const wb = new ExcelJS.Workbook();
+    const monThu = wb.addWorksheet('MON&THU');
+    monThu.getCell('A1').value = 'EKM 1 MONDAY&THURSDAY';
+    monThu.getCell('G1').value = 'EKM 2 MONDAY&THURSDAY';
+    monThu.getRow(2).values = ['SL NO', 'HCF NAME ', 'AFF NO', null, null, null, 'SL NO', 'HCF NAME ', 'AFF NO'];
+    monThu.getRow(3).values = [1, 'HEALTH CARE DIAGNOSTIC', 1428, null, null, null, 1, 'TOYO ENG', 2194];
+    monThu.getRow(4).values = [2, 'DISTRICT HOSPITAL ALUVA', '00078', null, null, null, 2, 'NOT REGISTERED', 9999];
+    monThu.getRow(5).values = [3, 'LISSI HOSPITAL', null, null, null, null, 3, 'TOYO ENG AGAIN', 2194];
+    const sunday = wb.addWorksheet('SUNDAY');
+    sunday.getCell('B1').value = 'EKM 1 SUNDAY ROUTE';
+    sunday.getRow(2).values = ['SL NO', 'HCF NAME', 'AFF.NO'];
+    sunday.getRow(3).values = [1, 'TALUK HOSPITAL PIRAVOM', 85];
+    const alp = wb.addWorksheet('Sheet3');
+    alp.getCell('A1').value = 'MONDAY,THURSADY (ALAPPUZHA 1)';
+    alp.getRow(2).values = ['SL NO', 'HCF NAME', 'AFF NO'];
+    alp.getRow(3).values = [1, 'GENERAL HOSPITAL ALAPPUZHA', 1428];
+    alp.getRow(4).values = [2, 'MDS LAB', null];
+    alp.getRow(5).values = [3, 'Cherthala Thaluk', 641];
+
+    const mpm = wb.addWorksheet('MPM');
+    mpm.getCell('A1').value = 'MPM-2 MONDAY&THURSDAY';
+    mpm.getRow(2).values = ['SI. NO', 'HCF NAME', 'HCE CODE'];
+    mpm.getRow(3).values = [1, 'MALAPPURAM COOP HOSPITAL', 555];
+
+    const wedSat = wb.addWorksheet('WED&SAT');
+    wedSat.getRow(1).values = ['SL NO', 'FACILITY NAME', 'AFF NO'];
+    wedSat.getRow(2).values = [1, 'CHELARI CLINIC', 777];
+
+    const uploaded = new ExcelJS.Workbook();
+    await uploaded.xlsx.load(await wb.xlsx.writeBuffer() as any);
+    const blocks = readRouteSheet(uploaded);
+
+    assert.deepStrictEqual(blocks.map(b => [b.route, b.days.join('/')]),
+        [['EKM 1', 'Monday/Thursday'], ['EKM 2', 'Monday/Thursday'], ['EKM 1', 'Sunday'], ['ALAPPUZHA 1', 'Monday/Thursday'], ['MPM-2', 'Monday/Thursday'], ['', 'Wednesday/Saturday']],
+        'a list per route and set of days; the route can follow the days; flexible headers supported');
+    assert.deepStrictEqual(blocks[0].rows.map(r => r.code), ['1428', '00078', ''], 'rows in the sheet order, blank code kept');
+    assert.strictEqual(blocks[0].rows[2].name, 'LISSI HOSPITAL', 'a row with no AFF NO is still read');
+
+    const ekm = 'branch-ekm';
+    const routes = [
+        { id: 'r1', route_name: 'EKM- 1', route_code: 'EKM', branch_id: ekm },
+        { id: 'r2', route_name: 'EKM-2', route_code: 'EKM-2', branch_id: ekm },
+        { id: 'r-mpm', route_name: 'MPM-2', route_code: 'MPM-2', branch_id: 'branch-mpm' },
+    ];
+    const hces = [
+        { id: 'h1428', hce_code: '1428', branch_id: ekm },
+        { id: 'h78', hce_code: '78', branch_id: ekm },
+        { id: 'h2194', hce_code: '2194', branch_id: ekm },
+        { id: 'h85', hce_code: '85', branch_id: ekm },
+        { id: 'tvla9999', hce_code: '9999', hce_name: 'SOME OTHER HOSPITAL', branch_id: 'branch-tvla' },
+        { id: 'tvla641', hce_code: '641', hce_name: 'CHERTHALA TALUK', branch_id: 'branch-tvla' },
+    ];
+    const plan = matchRouteSheet(blocks, routes, hces);
+    assert.deepStrictEqual(plan.map(p => p.target?.id), ['r1', 'r2', 'r1', undefined, 'r-mpm', undefined], '"EKM 1" is route "EKM- 1"; "ALAPPUZHA 1" matches none; "MPM-2" matches "r-mpm"');
+    assert.deepStrictEqual(matchBlock(plan[3], routes[0], hces).items, [{ hce_id: 'h1428', sl_no: 1 }, { hce_id: 'tvla641', sl_no: 3 }],
+        'a route picked by hand is matched in its branch; a hospital registered under another branch (same AFF NO and name) is not registered again; '
+        + 'a skipped row leaves a gap in the SL NOs');
+    assert.deepStrictEqual(plan[0].items, [{ hce_id: 'h1428', sl_no: 1 }, { hce_id: 'h78', sl_no: 2 }], 'AFF NO 00078 is HCE code 78');
+    assert.deepStrictEqual(plan[0].missing.map(r => r.name), ['LISSI HOSPITAL'], 'no AFF NO: cannot be registered, listed');
+    assert.deepStrictEqual(plan[1].items, [
+        { hce_id: 'h2194', sl_no: 1 },
+        { hce_code: '9999', hce_name: 'NOT REGISTERED', sl_no: 2 },
+        { hce_id: 'h2194', sl_no: 3 },
+    ], 'sheet order kept; a facility listed twice stays twice; an unregistered one is registered in its place');
+    assert.deepStrictEqual(plan[1].toRegister.map(r => r.code), ['9999'], 'another branch\'s HCE is not matched');
+
+    assert.strictEqual(frequencyOf(['Monday', 'Thursday']), 'Alternate days');
+    assert.strictEqual(frequencyOf(['Sunday']), 'Once a Week');
+    assert.strictEqual(frequencyOf(['Monday', 'Wednesday', 'Friday']), 'Thrice a Week');
+    assert.strictEqual(codeKey(78), '78');
+
+    console.log('route-sheet-import: all checks passed');
+})().catch(e => { console.error(e); process.exit(1); });

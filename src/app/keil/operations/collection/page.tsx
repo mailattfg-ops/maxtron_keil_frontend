@@ -40,7 +40,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { exportToExcel } from '@/utils/export';
 import { usePermission } from '@/hooks/usePermission';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 const ROUTE_API = `${API_BASE}/api/keil/operations/routes`;
 const ASSIGN_API = `${API_BASE}/api/keil/operations/assignments`;
 const COLLECTION_API = `${API_BASE}/api/keil/operations/collections`;
@@ -71,6 +71,7 @@ export default function DailyCollectionEntryPage() {
         registration_number: '',
         driver_name: '',
         spare_driver_name: '',
+        spare_picker_name: '',
         supervisor_name: '',
         remarks: '',
         start_time: '',
@@ -86,16 +87,31 @@ export default function DailyCollectionEntryPage() {
     const [entries, setEntries] = useState<Record<string, any>>({});
     const [showAllDays, setShowAllDays] = useState(false);
 
-    // The date's facilities in route order, each once: those due on its weekday,
+    // The date's facilities in exact serial number order: those due on its weekday,
     // those with no days set, and any marked visited (so a saved visit never drops off).
     const weekday = new Date(`${headerData.collection_date}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long' });
     const listed = new Set<string>();
-    const dayHces = assignedHces.filter(a => {
-        const days = a.collection_days || [];
-        const due = showAllDays || !days.length || days.includes(weekday) || entries[a.hce_id]?.is_visited;
-        if (!due || listed.has(a.hce_id)) return false;
-        listed.add(a.hce_id);
-        return true;
+    const dayHces = assignedHces
+        .filter(a => {
+            const days = a.collection_days || [];
+            const due = showAllDays || !days.length || days.includes(weekday) || entries[a.hce_id]?.is_visited;
+            if (!due || listed.has(a.id)) return false;
+            listed.add(a.id);
+            return true;
+        })
+        .sort((a, b) => {
+            const na = a.sl_no != null && !Number.isNaN(Number(a.sl_no)) ? Number(a.sl_no) : (a.sequence_order ?? Infinity);
+            const nb = b.sl_no != null && !Number.isNaN(Number(b.sl_no)) ? Number(b.sl_no) : (b.sequence_order ?? Infinity);
+            if (na !== nb) return na - nb;
+            return (a.sequence_order ?? 0) - (b.sequence_order ?? 0);
+        });
+
+    const markAllVisited = () => setEntries(prev => {
+        const next = { ...prev };
+        dayHces.forEach(a => {
+            if (!next[a.hce_id]?.is_visited) next[a.hce_id] = { ...next[a.hce_id], hce_id: a.hce_id, is_visited: true, visit_status: 'Visited' };
+        });
+        return next;
     });
 
     useEffect(() => {
@@ -105,7 +121,7 @@ export default function DailyCollectionEntryPage() {
     const fetchInitialData = async () => {
         const token = localStorage.getItem('token');
         try {
-            const compRes = await fetch(`${API_BASE}/api/keil/companies`, {
+            const compRes = await fetch(`${API_BASE}/api/maxtron/companies`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const compData = await compRes.json();
@@ -138,8 +154,8 @@ export default function DailyCollectionEntryPage() {
             if (eData.success && eData.data?.length > 0) {
                 setEmployees(eData.data || []);
             } else {
-                // Fallback to all employees
-                const mERes = await fetch(`${API_BASE}/api/keil/employees`, {
+                // Fallback to maxtron pool
+                const mERes = await fetch(`${API_BASE}/api/maxtron/employees`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const mEData = await mERes.json();
@@ -199,6 +215,7 @@ export default function DailyCollectionEntryPage() {
                     registration_number: savedBatch.registration_number || '',
                     driver_name: savedBatch.driver_name || '',
                     spare_driver_name: savedBatch.spare_driver_name || '',
+                    spare_picker_name: savedBatch.spare_picker_name || '',
                     supervisor_name: savedBatch.supervisor_name || '',
                     remarks: savedBatch.remarks || '',
                     start_time: savedBatch.start_time || '',
@@ -352,6 +369,7 @@ export default function DailyCollectionEntryPage() {
                     header: {
                         ...headerData,
                         spare_driver_name: headerData.spare_driver_name ? headerData.spare_driver_name.trim() : null,
+                        spare_picker_name: headerData.spare_picker_name ? headerData.spare_picker_name.trim() : null,
                         total_hce_assigned: stats.total_assigned,
                         total_visited: stats.total_visited,
                         assigned_bedded: stats.assigned_bedded,
@@ -413,6 +431,7 @@ export default function DailyCollectionEntryPage() {
                 'Vehicle Number',
                 'Driver Name',
                 'Spare Driver Name',
+                'Spare Picker Name',
                 'Supervisor Name',
                 'Start Time',
                 'End Time',
@@ -450,6 +469,7 @@ export default function DailyCollectionEntryPage() {
                         headerData.registration_number || 'N/A',
                         headerData.driver_name || 'N/A',
                         headerData.spare_driver_name || '-',
+                        headerData.spare_picker_name || '-',
                         headerData.supervisor_name || 'N/A',
                         headerData.start_time || '-',
                         headerData.end_time || '-',
@@ -493,16 +513,12 @@ export default function DailyCollectionEntryPage() {
                     return;
                 }
 
-                // One day's batches, loaded together; rows keep the same order.
-                const fullBatches = await Promise.all(batches.map(async (batch: any) => {
+                let slNo = 1;
+                for (const batch of batches) {
                     const fullRes = await fetch(`${COLLECTION_API}/${batch.id}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
-                    return fullRes.json();
-                }));
-
-                let slNo = 1;
-                for (const fullData of fullBatches) {
+                    const fullData = await fullRes.json();
                     if (fullData.success && fullData.data) {
                         const b = fullData.data;
                         const bTotalQty = (Number(b.dc_qty) || 0) + (Number(b.nw_qty) || 0) + (Number(b.rd_qty) || 0);
@@ -517,6 +533,7 @@ export default function DailyCollectionEntryPage() {
                                 b.registration_number || 'N/A',
                                 b.driver_name || 'N/A',
                                 b.spare_driver_name || '-',
+                                b.spare_picker_name || '-',
                                 b.supervisor_name || 'N/A',
                                 b.start_time || '-',
                                 b.end_time || '-',
@@ -554,6 +571,7 @@ export default function DailyCollectionEntryPage() {
                             headerData.registration_number || 'N/A',
                             headerData.driver_name || 'N/A',
                             headerData.spare_driver_name || '-',
+                            headerData.spare_picker_name || '-',
                             headerData.supervisor_name || 'N/A',
                             headerData.start_time || '-',
                             headerData.end_time || '-',
@@ -799,7 +817,18 @@ export default function DailyCollectionEntryPage() {
                                 placeholder="Enter spare driver name..." 
                                 className="h-10 rounded-md border-primary/20 bg-background font-bold text-sm" 
                                 value={headerData.spare_driver_name} 
-                                onChange={e => setHeaderData({ ...headerData, spare_driver_name: e.target.value })} 
+                                onChange={e => setHeaderData({ ...headerData, spare_driver_name: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 pl-1">
+                                <User className="w-3 h-3 text-primary" /> Spare Picker Name
+                            </label>
+                            <Input
+                                placeholder="Enter spare picker name..."
+                                className="h-10 rounded-md border-primary/20 bg-background font-bold text-sm"
+                                value={headerData.spare_picker_name}
+                                onChange={e => setHeaderData({ ...headerData, spare_picker_name: e.target.value })}
                             />
                         </div>
                         <div className="space-y-1.5">
@@ -877,6 +906,9 @@ export default function DailyCollectionEntryPage() {
                                     <input type="checkbox" checked={showAllDays} onChange={e => setShowAllDays(e.target.checked)} />
                                     Show all days
                                 </label>
+                                <Button type="button" size="sm" variant="outline" onClick={markAllVisited} className="h-8 text-xs font-bold border-primary/20 text-primary">
+                                    <Check className="w-3.5 h-3.5 mr-1.5" /> Mark all visited
+                                </Button>
                             </div>
                         </div>
                         <div className="overflow-x-auto">
@@ -896,7 +928,7 @@ export default function DailyCollectionEntryPage() {
                                         const visitStatus = entries[a.hce_id]?.visit_status || 'Not Visited';
                                         return (
                                             <tr key={a.id} className={`group border-b border-slate-50 transition-all ${isVisited ? 'bg-primary/10/30' : 'hover:bg-slate-50'}`}>
-                                                <td className="px-4 py-6 text-center text-xs font-black text-primary">{i + 1}</td>
+                                                <td className="px-4 py-6 text-center text-xs font-black text-primary">{(!showAllDays && a.sl_no) || i + 1}</td>
                                                 <td className="px-6 py-6 text-center">
                                                     <div 
                                                         onClick={() => {
