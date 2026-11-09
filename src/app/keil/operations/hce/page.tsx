@@ -556,6 +556,7 @@ export default function HCERegistryPage() {
                     headers={['HCE Code', 'Name', 'Category', 'Branch', 'Place', 'Collection', 'Hours', 'Actions']}
                     data={hces}
                     loading={loading}
+                    searchPlaceholder="Search by HCE code or name..."
                     searchFields={['hce_name', 'hce_code', 'hce_place', 'branch_name']}
                     renderRow={(h: any) => (
                         <tr key={h.id} className="hover:bg-primary/[0.02] transition-colors group border-b last:border-0 border-slate-100">

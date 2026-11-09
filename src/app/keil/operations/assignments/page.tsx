@@ -13,7 +13,7 @@ import {
     Settings,
     X,
     Save,
-    Map,
+    Map as MapIcon, // not "Map": that would hide JavaScript's Map
     Edit,
     Lock,
     Loader2
@@ -32,6 +32,7 @@ import {
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { TableView } from "@/components/ui/table-view";
 import { usePermission } from '@/hooks/usePermission';
+import { searchRows } from '@/utils/tableSearch';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 const ASSIGN_API = `${API_BASE}/api/keil/operations/assignments`;
@@ -56,7 +57,7 @@ function RouteAssignmentsContent() {
     const [routes, setRoutes] = useState<any[]>([]);
     const [selectedRouteId, setSelectedRouteId] = useState(routeId || '');
     const [assignments, setAssignments] = useState<any[]>([]);
-    const [allAssignments, setAllAssignments] = useState<any[]>([]); // all assignments across all routes
+    const [dayFilter, setDayFilter] = useState(''); // a list ("Tue & Fri"); '' shows them all
     const [availableHces, setAvailableHces] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAssigning, setIsAssigning] = useState(false);
@@ -103,19 +104,16 @@ function RouteAssignmentsContent() {
             }
 
             if (coId) {
-                const [rRes, hRes, allAssignRes] = await Promise.all([
+                const [rRes, hRes] = await Promise.all([
                     fetch(`${ROUTE_API}?company_id=${coId}`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                    fetch(`${HCE_API}?company_id=${coId}`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                    fetch(`${ASSIGN_API}`, { headers: { 'Authorization': `Bearer ${token}` } })
+                    fetch(`${HCE_API}?company_id=${coId}`, { headers: { 'Authorization': `Bearer ${token}` } })
                 ]);
 
                 const rData = await rRes.json();
                 const hData = await hRes.json();
-                const allAData = await allAssignRes.json();
 
                 if (rData.success) setRoutes(rData.data);
                 if (hData.success) setAvailableHces(hData.data);
-                if (allAData.success) setAllAssignments(allAData.data || []);
             }
         } catch (err) {
             console.error('Error fetching baseline data:', err);
@@ -253,21 +251,21 @@ function RouteAssignmentsContent() {
         setAssignmentForm(prev => ({ ...prev, collection_days: DAYS }));
     };
 
-    // Facilities on another route are left out. Facilities already on this route
-    // stay in the list: linking one again adds the new days to its link.
-    const onOtherRoutes = new Set(
-        allAssignments
-            .filter(a => a.route_id !== selectedRouteId && (!editingAssignment || a.id !== editingAssignment.id))
-            .map(a => a.hce_id)
-    );
-    const effectiveHces = availableHces.filter(h => !onOtherRoutes.has(h.id));
+    // A route's lists are its sets of days ("Tue & Fri"): the chosen list's
+    // facilities, in route order (the order they were entered)
+    const listOf = (a: any) => {
+        const days = DAYS.filter(d => (a.collection_days || []).includes(d));
+        return days.length === 7 ? 'Every day' : days.map(d => d.slice(0, 3)).join(' & ') || 'No days';
+    };
+    const lists = [...new Set(assignments.map(listOf))];
+    const list = lists.includes(dayFilter) ? dayFilter : '';
+    const shown = list ? assignments.filter(a => listOf(a) === list) : assignments;
+    const position = new Map(shown.map((a, i) => [a.id, i + 1]));
 
-    // The facility list narrowed by the search box; the chosen one always stays listed
-    const facilityQuery = facilitySearch.trim().toLowerCase();
-    const matchingHces = !facilityQuery ? effectiveHces : effectiveHces.filter(h =>
-        h.id === assignmentForm.hce_id
-        || String(h.hce_name || '').toLowerCase().includes(facilityQuery)
-        || String(h.hce_code || '').toLowerCase().includes(facilityQuery));
+    // The facility list narrowed by the search box; the chosen one always stays listed.
+    // A facility can be linked again: for other days, or on another route.
+    const facilityMatches = searchRows(availableHces, facilitySearch, ['hce_name', 'hce_code']);
+    const matchingHces = [...facilityMatches, ...availableHces.filter(h => h.id === assignmentForm.hce_id && !facilityMatches.includes(h))];
 
     if (permissionLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
 
@@ -291,7 +289,7 @@ function RouteAssignmentsContent() {
                     </div>
                     <div className="flex flex-col sm:flex-row items-center gap-4">
                         <div className="relative flex justify-center items-center group w-full sm:w-[300px]">
-                            <Map className="hidden md:block w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-primary/40 group-focus-within:text-primary transition-colors" />
+                            <MapIcon className="hidden md:block w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-primary/40 group-focus-within:text-primary transition-colors" />
                             <Select value={selectedRouteId} onValueChange={(val) => setSelectedRouteId(val)}>
                                 <SelectTrigger className="md:pl-9 h-10 w-full border-primary/20 bg-background shadow-sm font-bold text-xs md:text-sm">
                                     <SelectValue placeholder="Switch / Select Route" />
@@ -311,6 +309,26 @@ function RouteAssignmentsContent() {
                             </div>
                         )}
                     </div>
+                    {selectedRouteId && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1">List</span>
+                            {['', ...lists].map(l => (
+                                <Button
+                                    key={l || 'all'}
+                                    type="button"
+                                    size="sm"
+                                    variant={list === l ? 'default' : 'outline'}
+                                    onClick={() => setDayFilter(l)}
+                                    className="h-8 px-3 text-xs font-bold"
+                                >
+                                    {l || 'All'}
+                                    <span className="ml-1 opacity-60">
+                                        {l ? assignments.filter(a => listOf(a) === l).length : assignments.length}
+                                    </span>
+                                </Button>
+                            ))}
+                        </div>
+                    )}
                 </div>
                 {selectedRouteId && !isAssigning && !editingAssignment && canCreate && (
                     <Button 
@@ -326,7 +344,7 @@ function RouteAssignmentsContent() {
 
             {!selectedRouteId && (
                 <div className="h-80 flex flex-col items-center justify-center bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
-                    <Map className="w-16 h-16 text-slate-200 mb-4" />
+                    <MapIcon className="w-16 h-16 text-slate-200 mb-4" />
                     <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No Route Selected</p>
                     <p className="text-[10px] text-slate-400 mt-1">Select a logistical loop from the dropdown above to manage facility mapping.</p>
                 </div>
@@ -476,10 +494,12 @@ function RouteAssignmentsContent() {
                 </Card>
             ) : (
                 <TableView
+                    key={list}
                     title="Mapped Facilities"
-                    description={`Collection sequence for ${route?.route_name}`}
+                    description={`Collection sequence for ${route?.route_name}${list ? `, ${list} list` : ''}`}
                     headers={['HCE / Place', 'Type', 'Collection Days', 'Remarks', 'Actions']}
-                    data={assignments}
+                    data={shown}
+                    initialRowsPerPage={100}
                     loading={loading}
                     searchFields={['keil_hces.hce_name', 'keil_hces.hce_code', 'keil_hces.hce_place']}
                     renderRow={(a: any) => (
@@ -487,7 +507,7 @@ function RouteAssignmentsContent() {
                             <td className="px-6 py-6">
                                 <div className="flex items-center gap-3">
                                     <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-black text-primary shadow-sm border border-primary/10">
-                                        {a.sequence_order}
+                                        {position.get(a.id)}
                                     </div>
                                     <div className="flex flex-col">
                                         <span className="font-bold text-foreground text-sm truncate max-w-[200px]" title={a.keil_hces?.hce_name}>{a.keil_hces?.hce_name}</span>

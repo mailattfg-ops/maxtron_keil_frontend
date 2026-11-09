@@ -421,7 +421,7 @@ export default function RouteCollectionReportPage() {
                         headers={['Route / Branch', 'Vehicle & Personnel', 'Duration & KM', 'Coverage', 'Remarks', 'Manage']}
                         data={batches}
                         loading={loading}
-                        searchFields={['route.route_name', 'registration_number', 'driver_name', 'spare_driver_name']}
+                        searchFields={['route.route_name', 'registration_number', 'driver_name', 'spare_driver_name', 'spare_picker_name']}
                         renderRow={(batch: any) => (
                             <tr key={batch.id} className="hover:bg-slate-50/50 transition-colors border-b last:border-0">
                                 <td className="px-6 py-4">

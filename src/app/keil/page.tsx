@@ -57,6 +57,8 @@ export default function KeilDashboard() {
     const [filterCollectionRoute, setFilterCollectionRoute] = useState('all');
     const [filterFuelVehicle, setFilterFuelVehicle] = useState('all');
     const [filterMaintenanceVehicle, setFilterMaintenanceVehicle] = useState('all');
+    // Month filter for all four telemetry cards: 'YYYY-MM', or 'all'
+    const [filterMonth, setFilterMonth] = useState('all');
 
     const [loading, setLoading] = useState(true);
 
@@ -114,11 +116,23 @@ export default function KeilDashboard() {
         }
     };
 
+    // The database returns each vehicle's / route's totals per month ('YYYY-MM'); a row without a month counts only under All Months.
+    const inMonth = (row: any) => filterMonth === 'all' || row.month === filterMonth;
+
+    // Months that have any telemetry data, newest first, plus the current month
+    const monthOptions = useMemo(() => {
+        const now = new Date();
+        const months = new Set([`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`]);
+        [...summary.km, ...summary.fuel, ...summary.repairs, ...summary.collections].forEach(r => r.month && months.add(r.month));
+        return [...months].sort().reverse();
+    }, [summary]);
+
     // 1. Total Running KM (filtered by vehicle)
     const runningKmData = useMemo(() => {
+        const monthKm = summary.km.filter(inMonth);
         const filtered = filterKmVehicle === 'all'
-            ? summary.km
-            : summary.km.filter(l => String(l.vehicle_id) === String(filterKmVehicle));
+            ? monthKm
+            : monthKm.filter(l => String(l.vehicle_id) === String(filterKmVehicle));
 
         const totalKm = filtered.reduce((acc, row) => acc + row.km, 0);
         const tripCount = filtered.reduce((acc, row) => acc + row.trips, 0);
@@ -132,13 +146,14 @@ export default function KeilDashboard() {
             avgKm,
             vehicleLabel: selectedVeh ? selectedVeh.registration_number : 'All Fleet'
         };
-    }, [summary, filterKmVehicle, vehicles]);
+    }, [summary, filterKmVehicle, vehicles, filterMonth]);
 
     // 2. Collection % (filtered route-wise)
     const collectionRateData = useMemo(() => {
+        const monthCollections = summary.collections.filter(inMonth);
         const filtered = filterCollectionRoute === 'all'
-            ? summary.collections
-            : summary.collections.filter(c => String(c.route_id) === String(filterCollectionRoute));
+            ? monthCollections
+            : monthCollections.filter(c => String(c.route_id) === String(filterCollectionRoute));
 
         let totalAssigned = 0;
         let totalVisited = 0;
@@ -166,13 +181,14 @@ export default function KeilDashboard() {
             batchCount,
             routeLabel: selectedRoute ? selectedRoute.route_name : 'All Routes'
         };
-    }, [summary, filterCollectionRoute, routes]);
+    }, [summary, filterCollectionRoute, routes, filterMonth]);
 
     // 3. Fuel Consumption (filtered vehicle-wise)
     const fuelConsumptionData = useMemo(() => {
+        const monthFuel = summary.fuel.filter(inMonth);
         const filtered = filterFuelVehicle === 'all'
-            ? summary.fuel
-            : summary.fuel.filter(f => String(f.vehicle_id) === String(filterFuelVehicle));
+            ? monthFuel
+            : monthFuel.filter(f => String(f.vehicle_id) === String(filterFuelVehicle));
 
         let totalLiters = 0;
         let totalAmount = 0;
@@ -195,13 +211,14 @@ export default function KeilDashboard() {
             avgRate,
             vehicleLabel: selectedVeh ? selectedVeh.registration_number : 'All Fleet'
         };
-    }, [summary, filterFuelVehicle, vehicles]);
+    }, [summary, filterFuelVehicle, vehicles, filterMonth]);
 
     // 4. Vehicle Maintenance (filtered vehicle-wise)
     const maintenanceData = useMemo(() => {
+        const monthRepairs = summary.repairs.filter(inMonth);
         const filtered = filterMaintenanceVehicle === 'all'
-            ? summary.repairs
-            : summary.repairs.filter(r => String(r.vehicle_id) === String(filterMaintenanceVehicle));
+            ? monthRepairs
+            : monthRepairs.filter(r => String(r.vehicle_id) === String(filterMaintenanceVehicle));
 
         let totalCost = 0;
         let gstCost = 0;
@@ -230,7 +247,7 @@ export default function KeilDashboard() {
             avgCost,
             vehicleLabel: selectedVeh ? selectedVeh.registration_number : 'All Fleet'
         };
-    }, [summary, filterMaintenanceVehicle, vehicles]);
+    }, [summary, filterMaintenanceVehicle, vehicles, filterMonth]);
 
     if (permissionLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
 
@@ -273,7 +290,22 @@ export default function KeilDashboard() {
                         <BarChart3 className="w-5 h-5 text-primary" />
                         <h2 className="text-lg font-black text-slate-800 tracking-tight">Operational & Fleet Telemetry</h2>
                     </div>
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Dynamic Interactive Filters</span>
+                    <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-slate-400" />
+                        <Select value={filterMonth} onValueChange={setFilterMonth}>
+                            <SelectTrigger className="h-8 w-36 text-xs font-bold bg-white border-slate-200 rounded-lg">
+                                <SelectValue placeholder="Month" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-60 text-xs">
+                                <SelectItem value="all" className="font-bold">All Months</SelectItem>
+                                {monthOptions.map(m => (
+                                    <SelectItem key={m} value={m}>
+                                        {new Date(`${m}-01T00:00:00`).toLocaleString('en-IN', { month: 'short', year: 'numeric' })}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
