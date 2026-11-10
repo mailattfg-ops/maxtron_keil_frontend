@@ -77,7 +77,7 @@ export default function KeilPermissionConsolePage() {
       if (rolesData.success) setRoles(rolesData.data);
       if (permsData.success) setDbPermissions(permsData.data);
     } catch (err) {
-      error('Failed to load KEIL permission data');
+      error('Failed to load MAXTRON TRANSPORTATION permission data');
     } finally {
       setLoading(false);
     }
@@ -189,7 +189,7 @@ export default function KeilPermissionConsolePage() {
         <div className="space-y-1">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
             <ShieldCheck className="w-8 h-8 md:w-10 md:h-10 p-1.5 bg-secondary/10 text-secondary rounded-lg shrink-0" /> 
-            <span className="text-2xl md:text-3xl font-bold text-primary tracking-tight font-heading flex items-center gap-2">KEIL Permissions</span>
+            <span className="text-2xl md:text-3xl font-bold text-primary tracking-tight font-heading flex items-center gap-2">MAXTRON TRANSPORTATION Permissions</span>
           </h1>
           <p className="text-slate-500 text-xs md:text-sm font-medium mt-1">Configure access based on Sidebar Menu structure.</p>
         </div>

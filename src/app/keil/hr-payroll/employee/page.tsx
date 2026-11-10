@@ -906,7 +906,7 @@ export default function EmployeeInformationPage() {
               </div>
 
                <Button onClick={() => {
-                  navigator.clipboard.writeText(`KEIL Login Credentials\nUsername: ${newEmployeePopup.username}\nPassword: ${newEmployeePopup.password}`);
+                  navigator.clipboard.writeText(`MAXTRON TRANSPORTATION Login Credentials\nUsername: ${newEmployeePopup.username}\nPassword: ${newEmployeePopup.password}`);
                   info('Access credentials copied to clipboard.');
                 }}
                 className="w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm rounded-xl font-bold py-2.5" variant="outline"

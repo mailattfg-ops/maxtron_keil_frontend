@@ -58,7 +58,7 @@ export default function LoginPage() {
               <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-primary font-bold text-2xl shadow-inner">
                 K
               </div>
-              <h1 className="text-3xl font-bold tracking-wider">KEIL ERP</h1>
+              <h1 className="text-3xl font-bold tracking-wider">MAXTRON TRANSPORTATION ERP</h1>
             </div>
             
             <h2 className="text-4xl font-extrabold leading-tight mb-6">
@@ -82,7 +82,7 @@ export default function LoginPage() {
         <div className="w-full lg:w-1/2 p-10 sm:p-14 flex flex-col justify-center bg-card">
           <div className="mb-10 lg:hidden flex items-center space-x-3">
              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-inner">K</div>
-             <h1 className="text-2xl font-bold text-primary tracking-wider">KEIL</h1>
+             <h1 className="text-2xl font-bold text-primary tracking-wider">MAXTRON TRANSPORTATION</h1>
           </div>
 
           <div className="mb-10 text-center lg:text-left">
@@ -104,7 +104,7 @@ export default function LoginPage() {
                 <User className="w-5 h-5 absolute left-3.5 top-3 text-muted-foreground" />
                 <Input
                   type="text"
-                  placeholder="admin@keil.com"
+                  placeholder="user@keil.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-11 h-12 bg-background/50 border-input focus:bg-background transition-all"

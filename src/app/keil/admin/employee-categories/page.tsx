@@ -236,7 +236,7 @@ export default function EmployeeCategoriesPage() {
 
             <TableView
                 title="Available Classifications"
-                description="Standard groupings used across KEIL operations."
+                description="Standard groupings used across MAXTRON TRANSPORTATION operations."
                 headers={['Classification Name', 'System Key', 'Actions']}
                 data={categories}
                 loading={loading}

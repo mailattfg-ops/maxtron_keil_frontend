@@ -298,7 +298,7 @@ export default function RouteCollectionReportPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 md:p-6 rounded-xl shadow-sm border border-primary/10">
                 <div className="space-y-1">
                     <h1 className="text-2xl md:text-3xl font-black text-primary tracking-tight font-heading">Route Collection Map</h1>
-                    <p className="text-xs md:text-sm font-medium text-muted-foreground">Consolidated view of daily route operations for Keil.</p>
+                    <p className="text-xs md:text-sm font-medium text-muted-foreground">Consolidated view of daily route operations for Maxtron Transportation.</p>
                 </div>
                 
                 <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto">

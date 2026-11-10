@@ -450,7 +450,7 @@ export default function KeilPayrollPage() {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 md:p-6 rounded-xl shadow-sm border border-primary/10 font-heading">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-primary tracking-tight">KEIL Payroll Management</h1>
+                    <h1 className="text-2xl md:text-3xl font-bold text-primary tracking-tight">MAXTRON TRANSPORTATION Payroll Management</h1>
                     <p className="text-muted-foreground text-xs md:text-sm font-medium mt-1 italic">Manage employee month-wise salary distributions and net payouts for KEIL.</p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 md:gap-3">

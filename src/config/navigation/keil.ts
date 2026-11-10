@@ -10,7 +10,7 @@ import { NavItem } from './types';
 
 export const keilSidebarMenu: NavItem[] = [
     {
-        title: "KEIL Dashboard",
+        title: "MAXTRON TRANSPORTATION Dashboard",
         icon: TrendingUp,
         path: "/keil",
         permissionKey: "dashboard_view"

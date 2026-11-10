@@ -94,7 +94,7 @@ export default function KeilCustomerCollectionPage() {
             }
         } catch (err) {
             console.error('Error fetching initial data:', err);
-            toastError('Failed to initialize Keil finance data');
+            toastError('Failed to initialize Maxtron Transportation finance data');
         } finally {
             setLoading(false);
         }

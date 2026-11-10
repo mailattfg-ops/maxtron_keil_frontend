@@ -54,10 +54,10 @@ export const Sidebar = ({
         <div className="flex items-center justify-between p-4 border-b border-white/10">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-white dark:bg-slate-200 rounded-lg flex items-center justify-center text-primary font-bold text-base shadow-inner">
-              K
+              M
             </div>
             <h1 className="text-xl font-bold tracking-wider">
-              KEIL
+              MAXTRON TRANSPORTATION ERP
             </h1>
           </div>
           <button
@@ -171,7 +171,7 @@ function SidebarContent({
       </nav>
 
       <div className="p-6 text-sm text-primary-foreground/60 flex-shrink-0 bg-primary sticky bottom-0 border-t border-primary/20">
-        <p>KEIL ERP v1.0.0</p>
+        <p>MAXTRON TRANSPORTATION ERP v1.0.0</p>
       </div>
     </>
   );

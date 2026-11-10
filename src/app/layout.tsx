@@ -6,7 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'KEIL ERP',
+  title: 'MAXTRON TRANSPORTATION ERP',
   description: 'Enterprise Resource Planning for biomedical waste and fleet management',
 };
 

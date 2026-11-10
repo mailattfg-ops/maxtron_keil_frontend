@@ -72,7 +72,7 @@ export function writeSalaryFrontSheet(workbook: ExcelJS.Workbook, lines: SalaryL
         r++;
         ws.getRow(r).height = 35.1;
         ws.mergeCells(r, 1, r, 8);
-        box(r, 1).value = `KEIL SALARY ${plural(designation)} ${MONTH_ABBR[month - 1]} ${year}`;
+        box(r, 1).value = `MAXTRON TRANSPORTATION SALARY ${plural(designation)} ${MONTH_ABBR[month - 1]} ${year}`;
         for (let c = 2; c <= 8; c++) box(r, c);
 
         // Column headings

@@ -257,7 +257,7 @@ export default function KeilDashboard() {
                 <Lock className="w-12 h-12" />
             </div>
             <h2 className="text-2xl font-black text-primary uppercase tracking-tight">Access Restricted</h2>
-            <p className="text-muted-foreground font-medium max-w-sm">You do not have permission to access the KEIL Control Center. Please contact your administrator.</p>
+            <p className="text-muted-foreground font-medium max-w-sm">You do not have permission to access the MAXTRON TRANSPORTATION Control Center. Please contact your administrator.</p>
         </div>
     );
 
@@ -266,7 +266,7 @@ export default function KeilDashboard() {
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-black text-slate-800 tracking-tight">KEIL Control Center</h1>
+                    <h1 className="text-3xl font-black text-slate-800 tracking-tight">MAXTRON TRANSPORTATION Control Center</h1>
                     <p className="text-slate-500 font-medium">Monitoring Bio-Medical Waste Logistics, Fleet Telemetry & Route Efficiency.</p>
                 </div>
                 <div className="flex gap-2">
@@ -580,7 +580,7 @@ export default function KeilDashboard() {
                         <div className="flex justify-between items-center">
                             <div>
                                 <CardTitle className="text-xl font-black text-slate-800">Operational Quick Access</CardTitle>
-                                <CardDescription className="font-medium">Direct links to critical KEIL workflows.</CardDescription>
+                                <CardDescription className="font-medium">Direct links to critical MAXTRON TRANSPORTATION workflows.</CardDescription>
                             </div>
                             <TrendingUp className="w-10 h-10 text-slate-200" />
                         </div>
