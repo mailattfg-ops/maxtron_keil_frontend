@@ -242,14 +242,11 @@ export function buildTripSheetWorkbook(
       c.border = ALL_SIDES;
     });
 
-    // Trips: vehicle by vehicle, each in date and trip sheet order (a trip
-    // starting after midnight is logged on the same date, so its start time
-    // would put it ahead of the trip before it); start time when no sheet no
+    // Trips: vehicle by vehicle, each in date and time order
     trips.sort(
       (a, b) =>
         a.vehicle_no.localeCompare(b.vehicle_no) ||
         String(a.log_date).localeCompare(String(b.log_date)) ||
-        String(a.sheet_number ?? "").localeCompare(String(b.sheet_number ?? ""), undefined, { numeric: true }) ||
         String(a.start_time || "").localeCompare(String(b.start_time || "")),
     );
     const first = 8;
