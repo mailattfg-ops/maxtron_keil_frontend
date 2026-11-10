@@ -39,12 +39,17 @@ import {
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { exportToExcel } from '@/utils/export';
 import { usePermission } from '@/hooks/usePermission';
+import { searchRows } from '@/utils/tableSearch';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 const ROUTE_API = `${API_BASE}/api/keil/operations/routes`;
 const ASSIGN_API = `${API_BASE}/api/keil/operations/assignments`;
 const COLLECTION_API = `${API_BASE}/api/keil/operations/collections`;
 const VEHICLE_API = `${API_BASE}/api/keil/fleet/vehicles`;
+const HCE_API = `${API_BASE}/api/keil/operations/hces`;
+
+/** A facility visited off the route's list, shown as a row like a route link. */
+const extraRow = (hce: any) => ({ id: `extra-${hce.id}`, hce_id: hce.id, keil_hces: hce, extra: true });
 
 export default function DailyCollectionEntryPage() {
     const { success, error } = useToast();
@@ -86,12 +91,17 @@ export default function DailyCollectionEntryPage() {
     // Entries state: Map of HCE ID -> Entry Details
     const [entries, setEntries] = useState<Record<string, any>>({});
     const [showAllDays, setShowAllDays] = useState(false);
+    // Extra visits: facilities not on the route, added for this date only
+    const [extraHces, setExtraHces] = useState<any[]>([]);
+    const [allHces, setAllHces] = useState<any[]>([]);
+    const [addingVisit, setAddingVisit] = useState(false);
+    const [visitSearch, setVisitSearch] = useState('');
 
     // The date's facilities in exact serial number order: those due on its weekday,
     // those with no days set, and any marked visited (so a saved visit never drops off).
     const weekday = new Date(`${headerData.collection_date}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long' });
     const listed = new Set<string>();
-    const dayHces = assignedHces
+    const dayHces = [...assignedHces
         .filter(a => {
             const days = a.collection_days || [];
             const due = showAllDays || !days.length || days.includes(weekday) || entries[a.hce_id]?.is_visited;
@@ -104,7 +114,42 @@ export default function DailyCollectionEntryPage() {
             const nb = b.sl_no != null && !Number.isNaN(Number(b.sl_no)) ? Number(b.sl_no) : (b.sequence_order ?? Infinity);
             if (na !== nb) return na - nb;
             return (a.sequence_order ?? 0) - (b.sequence_order ?? 0);
-        });
+        }), ...extraHces];
+
+    // Serial numbers: route rows keep their SL NO; extra visits continue after the highest one
+    const plannedCount = dayHces.length - extraHces.length;
+    const plannedNo = (a: any, i: number) => (!showAllDays && Number(a.sl_no)) || i + 1;
+    const lastPlannedNo = Math.max(0, ...dayHces.slice(0, plannedCount).map(plannedNo));
+    const rowNo = (a: any, i: number) => i < plannedCount ? plannedNo(a, i) : lastPlannedNo + i - plannedCount + 1;
+
+    const openAddVisit = async () => {
+        setAddingVisit(true);
+        if (allHces.length) return;
+        try {
+            const res = await fetch(`${HCE_API}?company_id=${currentCompanyId}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+            const data = await res.json();
+            if (data.success) setAllHces(data.data || []);
+            else error(data.message || 'Failed to load the HCE Registry');
+        } catch (err: any) {
+            error(err.message);
+        }
+    };
+
+    const listedIds = new Set(dayHces.map(a => a.hce_id));
+    const visitChoices = addingVisit ? searchRows(allHces.filter(h => !listedIds.has(h.id)), visitSearch, ['hce_name', 'hce_code', 'hce_place']).slice(0, 20) : [];
+
+    const addVisit = (hce: any) => {
+        // On this route for other days: mark it visited, which lists it for this date
+        if (!assignedHces.some(a => a.hce_id === hce.id)) setExtraHces(prev => [...prev, extraRow(hce)]);
+        setEntries(prev => ({ ...prev, [hce.id]: { hce_id: hce.id, note: '', remark: '', ...prev[hce.id], is_visited: true, visit_status: 'Visited' } }));
+        setAddingVisit(false);
+        setVisitSearch('');
+    };
+
+    const removeVisit = (hceId: string) => {
+        setExtraHces(prev => prev.filter(a => a.hce_id !== hceId));
+        setEntries(prev => { const next = { ...prev }; delete next[hceId]; return next; });
+    };
 
     const markAllVisited = () => setEntries(prev => {
         const next = { ...prev };
@@ -121,7 +166,7 @@ export default function DailyCollectionEntryPage() {
     const fetchInitialData = async () => {
         const token = localStorage.getItem('token');
         try {
-            const compRes = await fetch(`${API_BASE}/api/maxtron/companies`, {
+            const compRes = await fetch(`${API_BASE}/api/keil/companies`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const compData = await compRes.json();
@@ -151,16 +196,7 @@ export default function DailyCollectionEntryPage() {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const eData = await eRes.json();
-            if (eData.success && eData.data?.length > 0) {
-                setEmployees(eData.data || []);
-            } else {
-                // Fallback to maxtron pool
-                const mERes = await fetch(`${API_BASE}/api/maxtron/employees`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const mEData = await mERes.json();
-                if (mEData.success) setEmployees(mEData.data || []);
-            }
+            if (eData.success) setEmployees(eData.data || []);
 
             // Fetch Vehicles
             const vehicleUrl = coId ? `${VEHICLE_API}?company_id=${coId}` : VEHICLE_API;
@@ -247,10 +283,17 @@ export default function DailyCollectionEntryPage() {
                         };
                     }
                 });
+                const onRoute = new Set(hces.map((a: any) => a.hce_id));
+                const extras = (savedBatch.entries || []).filter((e: any) => e.hce && !onRoute.has(e.hce_id));
+                extras.forEach((e: any) => {
+                    savedEntriesMap[e.hce_id] = { hce_id: e.hce_id, is_visited: !!e.is_visited, note: e.note || '', remark: e.remark || '', visit_status: e.visit_status || (e.is_visited ? 'Visited' : 'Not Visited') };
+                });
+                setExtraHces(extras.map((e: any) => extraRow(e.hce)));
                 setEntries(savedEntriesMap);
                 success(`Loaded saved collection data for ${dateToCheck}`);
             } else {
                 setExistingBatchId(null);
+                setExtraHces([]);
                 const initialEntries: Record<string, any> = {};
                 hces.forEach((a: any) => {
                     initialEntries[a.hce_id] = {
@@ -277,6 +320,7 @@ export default function DailyCollectionEntryPage() {
             fetchHcesForRoute(routeId, headerData.collection_date);
         } else {
             setAssignedHces([]);
+            setExtraHces([]);
             setEntries({});
             setExistingBatchId(null);
         }
@@ -381,7 +425,7 @@ export default function DailyCollectionEntryPage() {
                         collection_qty: (stats.total_visited / (stats.total_assigned || 1)) * 100,
                         company_id: currentCompanyId
                     },
-                    entries: dayHces.map(a => entries[a.hce_id])
+                    entries: dayHces.map((a, i) => ({ ...entries[a.hce_id], sl_no: rowNo(a, i) }))
                 };
 
                 const res = await fetch(COLLECTION_API, {
@@ -462,7 +506,7 @@ export default function DailyCollectionEntryPage() {
                 rows = dayHces.map((a, idx) => {
                     const entry = entries[a.hce_id] || {};
                     return [
-                        idx + 1,
+                        rowNo(a, idx),
                         formatCollectionDate(headerData.collection_date),
                         routeData?.route_name || 'N/A',
                         routeData?.route_code || 'N/A',
@@ -564,7 +608,7 @@ export default function DailyCollectionEntryPage() {
                     rows = dayHces.map((a, idx) => {
                         const entry = entries[a.hce_id] || {};
                         return [
-                            idx + 1,
+                            rowNo(a, idx),
                             formatCollectionDate(headerData.collection_date),
                             routeData?.route_name || 'N/A',
                             routeData?.route_code || 'N/A',
@@ -906,11 +950,29 @@ export default function DailyCollectionEntryPage() {
                                     <input type="checkbox" checked={showAllDays} onChange={e => setShowAllDays(e.target.checked)} />
                                     Show all days
                                 </label>
+                                <Button type="button" size="sm" variant="outline" onClick={() => addingVisit ? setAddingVisit(false) : openAddVisit()} className="h-8 text-xs font-bold border-primary/20 text-primary">
+                                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Visit
+                                </Button>
                                 <Button type="button" size="sm" variant="outline" onClick={markAllVisited} className="h-8 text-xs font-bold border-primary/20 text-primary">
                                     <Check className="w-3.5 h-3.5 mr-1.5" /> Mark all visited
                                 </Button>
                             </div>
                         </div>
+                        {addingVisit && (
+                            <div className="px-6 py-3 border-b border-slate-100 space-y-2">
+                                <Input autoFocus placeholder="Search the HCE Registry by name, code or place..." className="h-9 text-xs" value={visitSearch} onChange={e => setVisitSearch(e.target.value)} />
+                                <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-md">
+                                    {visitChoices.map(h => (
+                                        <button key={h.id} type="button" onClick={() => addVisit(h)} className="w-full text-left px-3 py-2 text-xs hover:bg-primary/5 flex items-center gap-2">
+                                            <span className="font-bold bg-muted text-muted-foreground px-1.5 py-0.5 rounded">{h.hce_code}</span>
+                                            <span className="font-bold">{h.hce_name}</span>
+                                            <span className="text-muted-foreground uppercase">{h.hce_place}</span>
+                                        </button>
+                                    ))}
+                                    {!visitChoices.length && <p className="px-3 py-2 text-xs text-muted-foreground">{allHces.length ? 'No matching facility.' : 'Loading...'}</p>}
+                                </div>
+                            </div>
+                        )}
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left border-collapse">
                                 <thead className="text-[10px] font-bold uppercase bg-primary text-primary-foreground">
@@ -928,7 +990,7 @@ export default function DailyCollectionEntryPage() {
                                         const visitStatus = entries[a.hce_id]?.visit_status || 'Not Visited';
                                         return (
                                             <tr key={a.id} className={`group border-b border-slate-50 transition-all ${isVisited ? 'bg-primary/10/30' : 'hover:bg-slate-50'}`}>
-                                                <td className="px-4 py-6 text-center text-xs font-black text-primary">{(!showAllDays && a.sl_no) || i + 1}</td>
+                                                <td className="px-4 py-6 text-center text-xs font-black text-primary">{rowNo(a, i)}</td>
                                                 <td className="px-6 py-6 text-center">
                                                     <div 
                                                         onClick={() => {
@@ -951,6 +1013,11 @@ export default function DailyCollectionEntryPage() {
                                                         <div className="flex items-center gap-2">
                                                            <span className="text-[10px] font-bold bg-muted text-muted-foreground px-1.5 py-0.5 rounded uppercase tracking-wider">{a.keil_hces?.hce_code}</span>
                                                            <span className="text-[10px] font-medium text-muted-foreground uppercase">{a.keil_hces?.hce_place}</span>
+                                                           {a.extra && (
+                                                               <button type="button" title="Remove this extra visit" onClick={() => removeVisit(a.hce_id)} className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wider inline-flex items-center gap-1">
+                                                                   Extra visit <X className="w-3 h-3" />
+                                                               </button>
+                                                           )}
                                                         </div>
                                                     </div>
                                                 </td>
