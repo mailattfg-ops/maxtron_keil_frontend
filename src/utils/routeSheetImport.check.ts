@@ -66,9 +66,22 @@ import { readRouteSheet, matchRouteSheet, matchBlock, frequencyOf, codeKey } fro
     ];
     const plan = matchRouteSheet(blocks, routes, hces);
     assert.deepStrictEqual(plan.map(p => p.target?.id), ['r1', 'r2', 'r1', undefined, 'r-mpm', undefined], '"EKM 1" is route "EKM- 1"; "ALAPPUZHA 1" matches none; "MPM-2" matches "r-mpm"');
-    assert.deepStrictEqual(matchBlock(plan[3], routes[0], hces).items, [{ hce_id: 'h1428', sl_no: 1 }, { hce_id: 'tvla641', sl_no: 3 }],
+    assert.deepStrictEqual(matchBlock(plan[3], routes[0], hces).items, [{ hce_id: 'h1428', sl_no: 1 }, { hce_id: 'tvla641', sl_no: 2 }],
         'a route picked by hand is matched in its branch; a hospital registered under another branch (same AFF NO and name) is not registered again; '
-        + 'a skipped row leaves a gap in the SL NOs');
+        + 'a skipped row does not leave a gap: SL NOs run 1, 2, 3...');
+
+    // A list's days come from its own title, not its title and sheet name added together
+    const mixed = new ExcelJS.Workbook();
+    const ws = mixed.addWorksheet('MON&THU');
+    ws.getCell('A1').value = 'EKM 2 TUESDAY&FRIDAY';
+    ws.getRow(2).values = ['SL NO', 'HCF NAME', 'AFF NO'];
+    ws.getRow(3).values = [1, 'TOYO ENG', 2194];
+    const noDays = mixed.addWorksheet('WED&SAT');
+    noDays.getCell('A1').value = 'EKM 2';
+    noDays.getRow(2).values = ['SL NO', 'HCF NAME', 'AFF NO'];
+    noDays.getRow(3).values = [1, 'TOYO ENG', 2194];
+    assert.deepStrictEqual(readRouteSheet(mixed).map(b => b.days.join('/')), ['Tuesday/Friday', 'Wednesday/Saturday'],
+        'title days win over the sheet name; the sheet name counts only when the title names no day');
     assert.deepStrictEqual(plan[0].items, [{ hce_id: 'h1428', sl_no: 1 }, { hce_id: 'h78', sl_no: 2 }], 'AFF NO 00078 is HCE code 78');
     assert.deepStrictEqual(plan[0].missing.map(r => r.name), ['LISSI HOSPITAL'], 'no AFF NO: cannot be registered, listed');
     assert.deepStrictEqual(plan[1].items, [

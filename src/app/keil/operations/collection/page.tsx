@@ -47,6 +47,8 @@ const ASSIGN_API = `${API_BASE}/api/keil/operations/assignments`;
 const COLLECTION_API = `${API_BASE}/api/keil/operations/collections`;
 const VEHICLE_API = `${API_BASE}/api/keil/fleet/vehicles`;
 const HCE_API = `${API_BASE}/api/keil/operations/hces`;
+const BRANCH_API = `${API_BASE}/api/keil/operations/branches`;
+const NEW_HCE = { hce_code: '', hce_name: '', hce_place: '', contact_person: '', contact_mobile: '', branch_id: '' };
 
 /** A facility visited off the route's list, shown as a row like a route link. */
 const extraRow = (hce: any) => ({ id: `extra-${hce.id}`, hce_id: hce.id, keil_hces: hce, extra: true });
@@ -96,6 +98,9 @@ export default function DailyCollectionEntryPage() {
     const [allHces, setAllHces] = useState<any[]>([]);
     const [addingVisit, setAddingVisit] = useState(false);
     const [visitSearch, setVisitSearch] = useState('');
+    const [branches, setBranches] = useState<any[]>([]);
+    const [newHce, setNewHce] = useState<typeof NEW_HCE | null>(null); // the Create form, when open
+    const [creatingHce, setCreatingHce] = useState(false);
 
     // The date's facilities in exact serial number order: those due on its weekday,
     // those with no days set, and any marked visited (so a saved visit never drops off).
@@ -126,8 +131,13 @@ export default function DailyCollectionEntryPage() {
         setAddingVisit(true);
         if (allHces.length) return;
         try {
-            const res = await fetch(`${HCE_API}?company_id=${currentCompanyId}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
-            const data = await res.json();
+            const headers = { 'Authorization': `Bearer ${localStorage.getItem('token')}` };
+            const [res, bRes] = await Promise.all([
+                fetch(`${HCE_API}?company_id=${currentCompanyId}`, { headers }),
+                fetch(`${BRANCH_API}?company_id=${currentCompanyId}`, { headers })
+            ]);
+            const [data, bData] = await Promise.all([res.json(), bRes.json()]);
+            if (bData.success) setBranches(bData.data || []);
             if (data.success) setAllHces(data.data || []);
             else error(data.message || 'Failed to load the HCE Registry');
         } catch (err: any) {
@@ -144,6 +154,34 @@ export default function DailyCollectionEntryPage() {
         setEntries(prev => ({ ...prev, [hce.id]: { hce_id: hce.id, note: '', remark: '', ...prev[hce.id], is_visited: true, visit_status: 'Visited' } }));
         setAddingVisit(false);
         setVisitSearch('');
+    };
+
+    // Register a new facility in the HCE Registry (same checks as the HCE page), then add it as an extra visit
+    const createAndAddVisit = async () => {
+        if (!newHce) return;
+        const form = { ...newHce, hce_code: newHce.hce_code.trim(), hce_name: newHce.hce_name.trim() };
+        if (form.hce_code.length < 2) return error('HCE Code is required (min 2 chars).');
+        if (form.hce_name.length < 3) return error('Facility Name is required (min 3 chars).');
+        if (!form.branch_id) return error('Please select a Branch.');
+        if (form.contact_mobile && !/^\d{10}$/.test(form.contact_mobile)) return error('Contact Mobile must be exactly 10 digits.');
+        setCreatingHce(true);
+        try {
+            const res = await fetch(HCE_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ ...form, company_id: currentCompanyId, collection_type: 'Daily', hce_category: 'Others', open_from: '09:00', open_to: '18:00' })
+            });
+            const data = await res.json();
+            if (!data.success) return error(data.message || 'Could not register the facility.');
+            setAllHces(prev => [data.data, ...prev]);
+            addVisit(data.data);
+            setNewHce(null);
+            success(`${form.hce_name} registered in the HCE Registry and added to this collection.`);
+        } catch (err: any) {
+            error(err.message);
+        } finally {
+            setCreatingHce(false);
+        }
     };
 
     const removeVisit = (hceId: string) => {
@@ -971,6 +1009,35 @@ export default function DailyCollectionEntryPage() {
                                     ))}
                                     {!visitChoices.length && <p className="px-3 py-2 text-xs text-muted-foreground">{allHces.length ? 'No matching facility.' : 'Loading...'}</p>}
                                 </div>
+                                {!newHce ? (
+                                    <Button type="button" size="sm" variant="outline" className="h-8 text-xs font-bold border-primary/20 text-primary"
+                                        onClick={() => setNewHce({ ...NEW_HCE, branch_id: routes.find(r => r.id === selectedRouteId)?.branch_id || '' })}>
+                                        <Plus className="w-3.5 h-3.5 mr-1.5" /> Create new facility
+                                    </Button>
+                                ) : (
+                                    <div className="border border-primary/20 rounded-md p-3 space-y-3">
+                                        <p className="text-xs font-bold text-primary">New facility: saved to the HCE Registry and added to this date</p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                            <Input placeholder="HCE Code (AFF NO) *" className="h-9 text-xs" value={newHce.hce_code} onChange={e => setNewHce({ ...newHce, hce_code: e.target.value })} />
+                                            <Input placeholder="Facility Name *" className="h-9 text-xs sm:col-span-2" value={newHce.hce_name} onChange={e => setNewHce({ ...newHce, hce_name: e.target.value })} />
+                                            <Input placeholder="Place" className="h-9 text-xs" value={newHce.hce_place} onChange={e => setNewHce({ ...newHce, hce_place: e.target.value })} />
+                                            <Input placeholder="Contact Person" className="h-9 text-xs" value={newHce.contact_person} onChange={e => setNewHce({ ...newHce, contact_person: e.target.value })} />
+                                            <Input placeholder="Contact Mobile (10 digits)" inputMode="numeric" maxLength={10} className="h-9 text-xs" value={newHce.contact_mobile} onChange={e => setNewHce({ ...newHce, contact_mobile: e.target.value.replace(/\D/g, '') })} />
+                                            <Select value={newHce.branch_id} onValueChange={val => setNewHce({ ...newHce, branch_id: val })}>
+                                                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Branch *" /></SelectTrigger>
+                                                <SelectContent className="bg-white">
+                                                    {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.branch_name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="flex justify-end gap-2">
+                                            <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setNewHce(null)}>Cancel</Button>
+                                            <Button type="button" size="sm" className="h-8 text-xs font-bold" disabled={creatingHce} onClick={createAndAddVisit}>
+                                                {creatingHce ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />} Register &amp; add visit
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                         <div className="overflow-x-auto">

@@ -67,7 +67,9 @@ export function readRouteSheet(workbook: Workbook): RouteSheetBlock[] {
                 for (let i = c; i <= codeCol && !title; i++) title = text(1, i);
             }
 
-            const words = `${title} ${ws.name}`.toUpperCase().match(DAY_WORD) || [];
+            // The list's own title names its days; the sheet's name only when the title names none, never both added together
+            const dayWords = (s: string) => s.toUpperCase().match(DAY_WORD) || [];
+            const words = dayWords(title).length ? dayWords(title) : dayWords(ws.name);
             const days = DAYS.filter(d => words.some(w => w.startsWith(d.slice(0, 3).toUpperCase())));
             // The route comes first ("EKM 1 MONDAY&THURSDAY") or after the days ("MONDAY,THURSDAY (ALAPPUZHA 1)")
             const upper = title.toUpperCase();
@@ -145,8 +147,8 @@ export function matchBlock(block: RouteSheetBlock, target: any, hces: any[]) {
         const hce = codeKey(row.code)
             ? byCode.get(codeKey(row.code)) || elsewhere.get(`${codeKey(row.code)}|${nameKey(row.name)}`)
             : undefined;
-        const sl = parseInt(row.sl, 10);
-        const sl_no = Number.isNaN(sl) ? null : sl; // kept, so a skipped row leaves a gap rather than renumbering the rest
+        // Numbered 1, 2, 3... in the sheet's SL NO order, so the list has no gaps
+        const sl_no = items.length + 1;
         if (hce) items.push({ hce_id: hce.id, sl_no });
         else if (codeKey(row.code) && row.name) {
             items.push({ hce_code: row.code, hce_name: row.name, sl_no });
