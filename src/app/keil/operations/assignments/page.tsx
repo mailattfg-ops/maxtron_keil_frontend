@@ -40,7 +40,7 @@ import { searchRows } from '@/utils/tableSearch';
 // A sheet list can be uploaded once it has a route with a branch (AFF NOs are looked up in that branch), days and facilities
 const uploadable = (b: any) => Boolean(b.target?.branch_id && b.days.length && b.items.length);
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 const ASSIGN_API = `${API_BASE}/api/keil/operations/assignments`;
 const HCE_API = `${API_BASE}/api/keil/operations/hces`;
 const ROUTE_API = `${API_BASE}/api/keil/operations/routes`;
@@ -100,7 +100,7 @@ function RouteAssignmentsContent() {
         const token = localStorage.getItem('token');
         try {
             // Find KEIL company ID first
-            const compRes = await fetch(`${API_BASE}/api/maxtron/companies`, {
+            const compRes = await fetch(`${API_BASE}/api/keil/companies`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const compData = await compRes.json();
