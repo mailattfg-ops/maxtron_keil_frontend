@@ -42,6 +42,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { exportToExcel } from '@/utils/export';
 import { usePermission } from '@/hooks/usePermission';
 import { searchRows } from '@/utils/tableSearch';
+import { dayList, onePerFacility } from '@/utils/collectionDay';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 const ROUTE_API = `${API_BASE}/api/keil/operations/routes`;
@@ -105,24 +106,10 @@ export default function DailyCollectionEntryPage() {
     const [creatingHce, setCreatingHce] = useState(false);
     const [editingHceId, setEditingHceId] = useState<string | null>(null); // set when the form edits an extra visit's facility
 
-    // The date's facilities in exact serial number order: those due on its weekday,
-    // those with no days set, and any marked visited (so a saved visit never drops off).
+    // The date's facilities in SL NO order: each day list by its own days, so lists sharing an AFF NO never mix
     const weekday = new Date(`${headerData.collection_date}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long' });
-    const listed = new Set<string>();
-    const dayHces = [...assignedHces
-        .filter(a => {
-            const days = a.collection_days || [];
-            const due = showAllDays || !days.length || days.includes(weekday) || entries[a.hce_id]?.is_visited;
-            if (!due || listed.has(a.id)) return false;
-            listed.add(a.id);
-            return true;
-        })
-        .sort((a, b) => {
-            const na = a.sl_no != null && !Number.isNaN(Number(a.sl_no)) ? Number(a.sl_no) : (a.sequence_order ?? Infinity);
-            const nb = b.sl_no != null && !Number.isNaN(Number(b.sl_no)) ? Number(b.sl_no) : (b.sequence_order ?? Infinity);
-            if (na !== nb) return na - nb;
-            return (a.sequence_order ?? 0) - (b.sequence_order ?? 0);
-        }), ...extraHces];
+    const visitedIds = new Set(Object.values(entries).filter((e: any) => e?.is_visited).map((e: any) => e.hce_id));
+    const dayHces = [...dayList(assignedHces, weekday, visitedIds, showAllDays), ...extraHces];
 
     // Serial numbers: route rows keep their SL NO; extra visits continue after the highest one
     const plannedCount = dayHces.length - extraHces.length;
@@ -424,13 +411,14 @@ export default function DailyCollectionEntryPage() {
     };
 
     const calculateTotals = () => {
-        const visitedList = dayHces.map(a => entries[a.hce_id]).filter(e => e?.is_visited);
+        const facilities = onePerFacility(dayHces); // counted once, as saved
+        const visitedList = facilities.map(a => entries[a.hce_id]).filter(e => e?.is_visited);
 
-        const total_assigned = dayHces.length;
+        const total_assigned = facilities.length;
         const total_visited = visitedList.length;
 
         // Breakdown
-        const assigned_bedded = dayHces.filter(a => a.keil_hces?.hce_category === 'Bedded').length;
+        const assigned_bedded = facilities.filter(a => a.keil_hces?.hce_category === 'Bedded').length;
         const assigned_others = total_assigned - assigned_bedded;
 
         const visited_bedded = visitedList.filter(e => {
@@ -508,7 +496,7 @@ export default function DailyCollectionEntryPage() {
                         collection_qty: (stats.total_visited / (stats.total_assigned || 1)) * 100,
                         company_id: currentCompanyId
                     },
-                    entries: dayHces.map((a, i) => ({ ...entries[a.hce_id], sl_no: rowNo(a, i) }))
+                    entries: onePerFacility(dayHces.map((a, i) => ({ ...entries[a.hce_id], hce_id: a.hce_id, sl_no: rowNo(a, i) })))
                 };
 
                 const res = await fetch(COLLECTION_API, {

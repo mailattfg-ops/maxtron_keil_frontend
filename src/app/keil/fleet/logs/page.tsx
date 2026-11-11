@@ -264,7 +264,9 @@ export default function VehicleDailyLogPage() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                // A slow or dropped connection ends with a message instead of an endless spinner
+                signal: AbortSignal.timeout(30000)
             });
             const data = await res.json();
             if (data.success) {
@@ -277,7 +279,9 @@ export default function VehicleDailyLogPage() {
                 error(data.message);
             }
         } catch (err: any) {
-            error(err.message);
+            error(err.name === 'TimeoutError'
+                ? 'Saving took too long, so it was stopped. Check the trip sheet list: if this entry is not there, click Save again (your entries are kept).'
+                : err.message);
         } finally {
             setSaving(false);
         }
