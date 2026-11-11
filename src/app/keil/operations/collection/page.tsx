@@ -23,7 +23,9 @@ import {
     Lock,
     Loader2,
     Filter,
-    FileSpreadsheet
+    FileSpreadsheet,
+    Pencil,
+    Trash2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -101,6 +103,7 @@ export default function DailyCollectionEntryPage() {
     const [branches, setBranches] = useState<any[]>([]);
     const [newHce, setNewHce] = useState<typeof NEW_HCE | null>(null); // the Create form, when open
     const [creatingHce, setCreatingHce] = useState(false);
+    const [editingHceId, setEditingHceId] = useState<string | null>(null); // set when the form edits an extra visit's facility
 
     // The date's facilities in exact serial number order: those due on its weekday,
     // those with no days set, and any marked visited (so a saved visit never drops off).
@@ -164,6 +167,7 @@ export default function DailyCollectionEntryPage() {
         if (form.hce_name.length < 3) return error('Facility Name is required (min 3 chars).');
         if (!form.branch_id) return error('Please select a Branch.');
         if (form.contact_mobile && !/^\d{10}$/.test(form.contact_mobile)) return error('Contact Mobile must be exactly 10 digits.');
+        if (editingHceId) return saveVisitEdit(form);
         setCreatingHce(true);
         try {
             const res = await fetch(HCE_API, {
@@ -184,9 +188,50 @@ export default function DailyCollectionEntryPage() {
         }
     };
 
-    const removeVisit = (hceId: string) => {
-        setExtraHces(prev => prev.filter(a => a.hce_id !== hceId));
-        setEntries(prev => { const next = { ...prev }; delete next[hceId]; return next; });
+    const closeVisitForm = () => { setNewHce(null); setEditingHceId(null); };
+
+    // Edit an extra visit's facility: opens the form filled in
+    const startEditVisit = async (a: any) => {
+        await openAddVisit();
+        const h = a.keil_hces || {};
+        setEditingHceId(a.hce_id);
+        setNewHce({ hce_code: h.hce_code || '', hce_name: h.hce_name || '', hce_place: h.hce_place || '', contact_person: h.contact_person || '', contact_mobile: h.contact_mobile || '', branch_id: h.branch_id || '' });
+    };
+
+    // Saving an edit asks twice: it changes the facility in the HCE Registry
+    const saveVisitEdit = async (form: typeof NEW_HCE) => {
+        if (!editingHceId) return;
+        if (!(await confirm({ title: 'Save changes?', message: `Save the changes to ${form.hce_name}?` }))) return;
+        if (!(await confirm({ title: 'Please confirm again', message: 'These details are saved to the HCE Registry, so they change wherever this facility appears. Continue?' }))) return;
+        setCreatingHce(true);
+        try {
+            const res = await fetch(`${HCE_API}/${editingHceId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify(form)
+            });
+            const data = await res.json();
+            if (!data.success) return error(data.message || 'Could not save the changes.');
+            setExtraHces(prev => prev.map(a => a.hce_id === editingHceId ? extraRow(data.data) : a));
+            setAllHces(prev => prev.map(h => h.id === editingHceId ? data.data : h));
+            closeVisitForm();
+            setAddingVisit(false);
+            success(`${form.hce_name} updated.`);
+        } catch (err: any) {
+            error(err.message);
+        } finally {
+            setCreatingHce(false);
+        }
+    };
+
+    // Deleting asks twice; only extra visits can be deleted, never the route sheet's facilities
+    const removeVisit = async (a: any) => {
+        const name = a.keil_hces?.hce_name || 'this facility';
+        if (!(await confirm({ title: 'Delete extra visit?', message: `Remove ${name} from this day's collection?`, type: 'danger', confirmLabel: 'Delete' }))) return;
+        if (!(await confirm({ title: 'Please confirm again', message: `Are you sure you want to delete the extra visit to ${name}? It stays in the HCE Registry.`, type: 'danger', confirmLabel: 'Yes, delete' }))) return;
+        setExtraHces(prev => prev.filter(x => x.hce_id !== a.hce_id));
+        setEntries(prev => { const next = { ...prev }; delete next[a.hce_id]; return next; });
+        success(existingBatchId ? `${name} removed. Click Save to update the saved report.` : `${name} removed.`);
     };
 
     const markAllVisited = () => setEntries(prev => {
@@ -988,7 +1033,7 @@ export default function DailyCollectionEntryPage() {
                                     <input type="checkbox" checked={showAllDays} onChange={e => setShowAllDays(e.target.checked)} />
                                     Show all days
                                 </label>
-                                <Button type="button" size="sm" variant="outline" onClick={() => addingVisit ? setAddingVisit(false) : openAddVisit()} className="h-8 text-xs font-bold border-primary/20 text-primary">
+                                <Button type="button" size="sm" variant="outline" onClick={() => { if (addingVisit) { setAddingVisit(false); closeVisitForm(); } else openAddVisit(); }} className="h-8 text-xs font-bold border-primary/20 text-primary">
                                     <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Visit
                                 </Button>
                                 <Button type="button" size="sm" variant="outline" onClick={markAllVisited} className="h-8 text-xs font-bold border-primary/20 text-primary">
@@ -1011,12 +1056,12 @@ export default function DailyCollectionEntryPage() {
                                 </div>
                                 {!newHce ? (
                                     <Button type="button" size="sm" variant="outline" className="h-8 text-xs font-bold border-primary/20 text-primary"
-                                        onClick={() => setNewHce({ ...NEW_HCE, branch_id: routes.find(r => r.id === selectedRouteId)?.branch_id || '' })}>
+                                        onClick={() => { setEditingHceId(null); setNewHce({ ...NEW_HCE, branch_id: routes.find(r => r.id === selectedRouteId)?.branch_id || '' }); }}>
                                         <Plus className="w-3.5 h-3.5 mr-1.5" /> Create new facility
                                     </Button>
                                 ) : (
                                     <div className="border border-primary/20 rounded-md p-3 space-y-3">
-                                        <p className="text-xs font-bold text-primary">New facility: saved to the HCE Registry and added to this date</p>
+                                        <p className="text-xs font-bold text-primary">{editingHceId ? 'Edit extra visit: changes are saved to the HCE Registry' : 'New facility: saved to the HCE Registry and added to this date'}</p>
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                             <Input placeholder="HCE Code (AFF NO) *" className="h-9 text-xs" value={newHce.hce_code} onChange={e => setNewHce({ ...newHce, hce_code: e.target.value })} />
                                             <Input placeholder="Facility Name *" className="h-9 text-xs sm:col-span-2" value={newHce.hce_name} onChange={e => setNewHce({ ...newHce, hce_name: e.target.value })} />
@@ -1031,9 +1076,9 @@ export default function DailyCollectionEntryPage() {
                                             </Select>
                                         </div>
                                         <div className="flex justify-end gap-2">
-                                            <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => setNewHce(null)}>Cancel</Button>
+                                            <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={closeVisitForm}>Cancel</Button>
                                             <Button type="button" size="sm" className="h-8 text-xs font-bold" disabled={creatingHce} onClick={createAndAddVisit}>
-                                                {creatingHce ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />} Register &amp; add visit
+                                                {creatingHce ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />} {editingHceId ? 'Save changes' : <>Register &amp; add visit</>}
                                             </Button>
                                         </div>
                                     </div>
@@ -1081,9 +1126,15 @@ export default function DailyCollectionEntryPage() {
                                                            <span className="text-[10px] font-bold bg-muted text-muted-foreground px-1.5 py-0.5 rounded uppercase tracking-wider">{a.keil_hces?.hce_code}</span>
                                                            <span className="text-[10px] font-medium text-muted-foreground uppercase">{a.keil_hces?.hce_place}</span>
                                                            {a.extra && (
-                                                               <button type="button" title="Remove this extra visit" onClick={() => removeVisit(a.hce_id)} className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wider inline-flex items-center gap-1">
-                                                                   Extra visit <X className="w-3 h-3" />
-                                                               </button>
+                                                               <>
+                                                                   <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wider">Extra visit</span>
+                                                                   <button type="button" title="Edit this extra visit" aria-label="Edit this extra visit" onClick={() => startEditVisit(a)} className="p-1 rounded text-primary hover:bg-primary/10">
+                                                                       <Pencil className="w-3.5 h-3.5" />
+                                                                   </button>
+                                                                   <button type="button" title="Delete this extra visit" aria-label="Delete this extra visit" onClick={() => removeVisit(a)} className="p-1 rounded text-destructive hover:bg-destructive/10">
+                                                                       <Trash2 className="w-3.5 h-3.5" />
+                                                                   </button>
+                                                               </>
                                                            )}
                                                         </div>
                                                     </div>
