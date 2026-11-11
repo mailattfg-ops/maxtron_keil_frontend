@@ -29,14 +29,17 @@ const trip = (log_date: string, vehicle_no: string, vehicle_category: string, sh
     assert.strictEqual(lcv.getCell('E5').value, '16.09.2026 TO 30.09.2026', 'period');
     assert.strictEqual(lcv.getCell('B6').value, 'LCV LIKE TATA 407 FOR 36 MONTHS');
     assert.strictEqual(lcv.getCell('H7').value, 'VEHICLE REG. NO.');
-    // vehicle by vehicle, date order within each
+    // vehicle by vehicle in the order added: rows are given in entry order, and
+    // 2744's 17th was added before its 16th, so it stays first
     assert.deepStrictEqual([8, 9, 10, 11].map(r => [lcv.getCell(r, 8).value, (lcv.getCell(r, 2).value as Date).toISOString().slice(0, 10)]),
-        [['KL-09-AX-2744', '2026-09-16'], ['KL-09-AX-2744', '2026-09-17'], ['KL-09-AX-2744', '2026-09-28'], ['KL-70-H-4621', '2026-09-16']]);
-    assert.strictEqual((lcv.getCell('G8').value as any).formula, 'F8-E8');
-    assert.strictEqual((lcv.getCell('G8').value as any).result, 194);
+        [['KL-09-AX-2744', '2026-09-17'], ['KL-09-AX-2744', '2026-09-16'], ['KL-09-AX-2744', '2026-09-28'], ['KL-70-H-4621', '2026-09-16']]);
+    const lcvAddedFirst = buildTripSheetWorkbook([rows[2], ...rows]).getWorksheet('LCV')!;
+    assert.strictEqual(lcvAddedFirst.getCell('H8').value, 'KL-70-H-4621', 'not A to Z: the vehicle added first comes first');
+    assert.strictEqual((lcv.getCell('G9').value as any).formula, 'F9-E9');
+    assert.strictEqual((lcv.getCell('G9').value as any).result, 194);
     assert.strictEqual(lcv.getCell('G10').value, null, 'an open trip has no total km');
-    assert.ok(Math.abs((lcv.getCell('L8').value as number) - (7 * 60 + 44) / 1440) < 1e-9, 'start time is an Excel time');
-    assert.strictEqual(lcv.getCell('L8').numFmt, 'hh:mm');
+    assert.ok(Math.abs((lcv.getCell('L9').value as number) - (7 * 60 + 44) / 1440) < 1e-9, 'start time is an Excel time');
+    assert.strictEqual(lcv.getCell('L9').numFmt, 'hh:mm');
     assert.strictEqual(lcv.getCell('A12').value, 'TOTAL :');
     assert.deepStrictEqual(lcv.getCell('G12').value, { formula: 'SUM(G8:G11)', result: 194 + 229 + 87 });
     const pickup = wb.getWorksheet('PICK UP')!;

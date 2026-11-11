@@ -242,12 +242,15 @@ export function buildTripSheetWorkbook(
       c.border = ALL_SIDES;
     });
 
-    // Trips: vehicle by vehicle, each in date and time order
+    // Trips: vehicle by vehicle, as the client enters them: vehicles in the order
+    // their first trip was added, each vehicle's trips in the order added
+    // (rows arrive in that order). The sort is stable, so it only groups.
+    const firstSeen = new Map<string, number>();
+    trips.forEach((t, i) => {
+      if (!firstSeen.has(t.vehicle_no)) firstSeen.set(t.vehicle_no, i);
+    });
     trips.sort(
-      (a, b) =>
-        a.vehicle_no.localeCompare(b.vehicle_no) ||
-        String(a.log_date).localeCompare(String(b.log_date)) ||
-        String(a.start_time || "").localeCompare(String(b.start_time || "")),
+      (a, b) => firstSeen.get(a.vehicle_no)! - firstSeen.get(b.vehicle_no)!,
     );
     const first = 8;
     trips.forEach((t, i) => {
