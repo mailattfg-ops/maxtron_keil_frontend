@@ -144,7 +144,8 @@ export default function RouteCollectionReportPage() {
             'TOTAL HCE', '', '', // 9, 10, 11
             'VISITED HCE', '', '', // 12, 13, 14
             'COLLECTION', 'DC', 'NW', 'RB',
-            'MISSED', '', '' // 19, 20, 21
+            'MISSED', '', '', // 19, 20, 21
+            'REMARKS'
         ];
         const headerRow1 = worksheet.addRow(mainHeader);
         
@@ -154,7 +155,8 @@ export default function RouteCollectionReportPage() {
             'BEDDED', 'OTHERS', 'TOTAL',
             'BEDDED', 'OTHERS', 'TOTAL',
             '', '', '', '',
-            'BEDDED', 'OTHERS', 'TOTAL'
+            'BEDDED', 'OTHERS', 'TOTAL',
+            ''
         ];
         const headerRow2 = worksheet.addRow(subHeader);
 
@@ -185,7 +187,7 @@ export default function RouteCollectionReportPage() {
         worksheet.mergeCells('S1:U1'); // MISSED
         
         // Vertical Merge for fixed headers
-        ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'O', 'P', 'Q', 'R'].forEach(col => {
+        ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'O', 'P', 'Q', 'R', 'V'].forEach(col => {
             worksheet.mergeCells(`${col}1:${col}2`);
         });
 
@@ -248,7 +250,8 @@ export default function RouteCollectionReportPage() {
                 // MISSED
                 missed_bedded,
                 missed_others,
-                (total_assigned - total_visited)
+                (total_assigned - total_visited),
+                batch.remarks || '-'
             ];
             const r = worksheet.addRow(rowData);
             r.eachCell(cell => {

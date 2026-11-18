@@ -130,6 +130,7 @@ export default function BatchDetailsPage() {
     <div class="info-box"><div class="label">Bag Counts (DC / NW / RB)</div><div class="value">${batch.dc_qty || 0} / ${batch.nw_qty || 0} / ${batch.rd_qty || 0} = ${totalBagCount} Total</div></div>
     <div class="info-box"><div class="label">Coverage</div><div class="value">${batch.total_visited} / ${batch.total_hce_assigned} Facilities</div></div>
   </div>
+  <div class="info-box" style="margin-bottom:20px"><div class="label">Remarks</div><div class="value">${batch.remarks || '-'}</div></div>
   <table>
     <tr><th>#</th><th>Facility</th><th>Code</th><th>Place</th><th>Status</th><th>Y</th><th>R</th><th>W</th><th>B</th><th>Remark</th></tr>
     ${(batch.entries || []).map((e: any, i: number) => `
@@ -143,7 +144,7 @@ export default function BatchDetailsPage() {
       <td>${e.red_bags || 0}</td>
       <td>${e.white_containers || 0}</td>
       <td>${e.bottle_containers || 0}</td>
-      <td>${e.remarks || '-'}</td>
+      <td>${e.remark || e.remarks || '-'}</td>
     </tr>`).join('')}
   </table>
   <div style="margin-top:20px;font-size:10px;color:#94a3b8;text-align:center;">End of Logistical Manifest – Printed ${new Date().toLocaleString()}</div>
@@ -311,6 +312,11 @@ export default function BatchDetailsPage() {
                 </div>
             </div>
 
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-primary/10">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Remarks</p>
+                <p className="text-sm font-medium text-foreground mt-1 whitespace-pre-wrap">{batch.remarks || <span className="opacity-40">No remarks logged.</span>}</p>
+            </div>
+
             {/* Detailed Transaction Log */}
             <Card className="border-primary/10 shadow-2xl overflow-hidden bg-white/80 backdrop-blur-md rounded-2xl">
                 <div className="bg-primary/5 px-10 py-6 border-b border-primary/10 flex justify-between items-center">
@@ -389,7 +395,7 @@ export default function BatchDetailsPage() {
                                         </div>
                                     </td>
                                     <td className="px-10 py-5 text-xs font-medium text-muted-foreground italic max-w-[200px]">
-                                        {entry.remarks || <span className="opacity-20 text-foreground">No field notes</span>}
+                                        {entry.remark || entry.remarks || <span className="opacity-20 text-foreground">No field notes</span>}
                                     </td>
                                     <td className="px-10 py-5 text-right">
                                         <div className="flex flex-col items-end gap-1.5">

@@ -873,6 +873,12 @@ export default function DailyCollectionEntryPage() {
                 </CardHeader>
                 <CardContent className="p-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <div className="space-y-1.5 md:col-span-2 lg:col-span-3">
+                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 pl-1">
+                                <Dna className="w-3 h-3 text-primary" /> Execution Remarks
+                            </label>
+                            <Input placeholder="Notes regarding session" className="h-10 rounded-md border-primary/20 bg-background font-bold text-sm" value={headerData.remarks} onChange={e => setHeaderData({ ...headerData, remarks: e.target.value })} />
+                        </div>
                         <div className="space-y-1.5">
                             <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 pl-1">
                                 <Calendar className="w-3 h-3 text-primary" /> Effective Date
@@ -960,12 +966,6 @@ export default function DailyCollectionEntryPage() {
                                     ))}
                                 </SelectContent>
                             </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 pl-1">
-                                <Dna className="w-3 h-3 text-primary" /> Execution Remarks
-                            </label>
-                            <Input placeholder="Notes regarding session" className="h-10 rounded-md border-primary/20 bg-background font-bold text-sm" value={headerData.remarks} onChange={e => setHeaderData({ ...headerData, remarks: e.target.value })} />
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 pl-1">
@@ -1149,9 +1149,8 @@ export default function DailyCollectionEntryPage() {
                                                     </Select>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <textarea 
-                                                        disabled={!isVisited} 
-                                                        placeholder="Remark..." 
+                                                    <textarea
+                                                        placeholder={isVisited ? 'Remark...' : 'Reason not visited...'}
                                                         className="w-full h-12 text-[11px] font-medium bg-background border border-primary/20 rounded-md p-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" 
                                                         value={entries[a.hce_id]?.remark || ''} 
                                                         onChange={e => updateEntry(a.hce_id, 'remark', e.target.value)} 

@@ -164,7 +164,7 @@ export default function HCEServiceLedgerPage() {
                 ent.header?.supervisor_name || 'N/A',
                 ent.start_time || '00:00',
                 ent.end_time || '00:00',
-                ent.remarks || 'N/A'
+                ent.remark || ent.remarks || 'N/A'
             ];
         });
 
@@ -358,7 +358,7 @@ export default function HCEServiceLedgerPage() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-[10px] font-medium text-muted-foreground italic max-w-[150px] truncate">
-                                            {ent.remarks || '--'}
+                                            {ent.remark || ent.remarks || '--'}
                                         </td>
                                 </tr>
                             )}
