@@ -557,8 +557,12 @@ export default function HCERegistryPage() {
                     data={hces}
                     loading={loading}
                     searchPlaceholder="Search by HCE code or name..."
-                    searchFields={['hce_name', 'hce_code', 'hce_place', 'branch_name']}
-                    renderRow={(h: any) => (
+                    searchFields={['hce_name', 'hce_code', 'hce_place', 'address', 'branch_name']}
+                    renderRow={(h: any) => {
+                        // The full address, with the place added when the address does not already name it
+                        const address = [h.address, h.hce_place].map(v => (v || '').trim()).filter((v, i, a) => v && !(i === 1 && a[0].toLowerCase().includes(v.toLowerCase()))).join(', ');
+                        const contact = [h.contact_person, h.contact_mobile].map(v => (v || '').trim()).filter(Boolean).join(' · ');
+                        return (
                         <tr key={h.id} className="hover:bg-primary/[0.02] transition-colors group border-b last:border-0 border-slate-100">
                             <td className="px-6 py-6 min-w-[120px]">
                                 <span className="text-xs font-bold px-3 py-1 bg-primary/10 text-primary rounded-lg uppercase tracking-wider whitespace-nowrap">{h.hce_code}</span>
@@ -574,7 +578,9 @@ export default function HCERegistryPage() {
                                 </span>
                             </td>
                             <td className="px-6 py-6 text-sm font-bold text-secondary min-w-[150px]">{h.branch_name}</td>
-                            <td className="px-6 py-6 text-sm font-bold text-secondary min-w-[150px]">{h.hce_place}</td>
+                            <td className="px-6 py-6 text-sm font-bold text-secondary min-w-[150px]">
+                                <span className="block truncate max-w-[220px]" title={[address, contact && `Contact: ${contact}`].filter(Boolean).join('\n') || undefined}>{address || '-'}</span>
+                            </td>
                             <td className="px-6 py-6 min-w-[200px]">
                                 <span className="text-[10px] font-black uppercase tracking-widest bg-secondary/10 text-secondary px-3 py-1.5 rounded-full border border-secondary/10 whitespace-nowrap">{h.collection_type}</span>
                             </td>
@@ -598,7 +604,8 @@ export default function HCERegistryPage() {
                                  </div>
                              </td>
                         </tr>
-                    )}
+                        );
+                    }}
                 />
             )}
         </div>
