@@ -873,12 +873,6 @@ export default function DailyCollectionEntryPage() {
                 </CardHeader>
                 <CardContent className="p-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        <div className="space-y-1.5 md:col-span-2 lg:col-span-3">
-                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 pl-1">
-                                <Dna className="w-3 h-3 text-primary" /> Execution Remarks
-                            </label>
-                            <Input placeholder="Notes regarding session" className="h-10 rounded-md border-primary/20 bg-background font-bold text-sm" value={headerData.remarks} onChange={e => setHeaderData({ ...headerData, remarks: e.target.value })} />
-                        </div>
                         <div className="space-y-1.5">
                             <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 pl-1">
                                 <Calendar className="w-3 h-3 text-primary" /> Effective Date
@@ -1073,6 +1067,12 @@ export default function DailyCollectionEntryPage() {
                                 )}
                             </div>
                         )}
+                        <div className="px-6 py-4 border-b border-primary/10 space-y-1.5">
+                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 pl-1">
+                                <Dna className="w-3 h-3 text-primary" /> Execution Remarks
+                            </label>
+                            <Input placeholder="Notes regarding session" className="h-10 rounded-md border-primary/20 bg-background font-bold text-sm" value={headerData.remarks} onChange={e => setHeaderData({ ...headerData, remarks: e.target.value })} />
+                        </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left border-collapse">
                                 <thead className="text-[10px] font-bold uppercase bg-primary text-primary-foreground">
