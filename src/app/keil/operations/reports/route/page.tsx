@@ -126,7 +126,15 @@ export default function RouteCollectionReportPage() {
         fetchReport(currentCompanyId, '', '', newFilters.route_id);
     };
 
+    const [exporting, setExporting] = useState(false);
     const handleExport = async () => {
+        setExporting(true);
+        try { await buildExport(); }
+        catch (err: any) { error(err?.message || 'Export failed. Please try again.'); }
+        finally { setExporting(false); }
+    };
+
+    const buildExport = async () => {
         if (batches.length === 0) {
             error("No collection data available to export.");
             return;
@@ -191,18 +199,16 @@ export default function RouteCollectionReportPage() {
             worksheet.mergeCells(`${col}1:${col}2`);
         });
 
-        // Fetch full details for each batch to get accurate entries for old data.
-        // Ten at a time: one by one is slow, and all at once overloads the API on a long date range.
-        const detailedBatches: any[] = [];
-        for (let i = 0; i < batches.length; i += 10) {
-            detailedBatches.push(...await Promise.all(batches.slice(i, i + 10).map(async (summaryBatch: any) => {
-                const detailRes = await fetch(`${COLLECTION_API}/${summaryBatch.id}`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
-                const detailData = await detailRes.json();
-                return detailData.success ? detailData.data : summaryBatch;
-            })));
-        }
+        // The breakdown is counted from the entries (the saved bedded totals are often 0),
+        // fetched with the list in one request: one request per batch hung the button.
+        let url = `${COLLECTION_API}?company_id=${currentCompanyId}&with_entries=1`;
+        if (filters.date_from) url += `&date_from=${filters.date_from}`;
+        if (filters.date_to) url += `&date_to=${filters.date_to}`;
+        if (filters.route_id && filters.route_id !== 'all') url += `&route_id=${filters.route_id}`;
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.message || 'Could not load the collection data.');
+        const detailedBatches: any[] = json.data;
 
         // Add Data Rows
         for (const batch of detailedBatches) {
@@ -310,10 +316,10 @@ export default function RouteCollectionReportPage() {
                         variant="outline" 
                         className="flex-1 md:flex-none rounded-full px-4 md:px-6 border-primary/20 text-primary hover:bg-primary/5 font-bold uppercase tracking-wider text-[10px] md:text-xs h-10 shadow-sm" 
                         onClick={handleExport}
-                        disabled={batches.length === 0}
+                        disabled={batches.length === 0 || exporting}
                     >
-                        <Download className="w-4 h-4 mr-1 md:mr-2" /> 
-                        <span className="hidden md:inline">Export Report</span>
+                        {exporting ? <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-1 md:mr-2" />}
+                        <span className="hidden md:inline">{exporting ? 'Exporting...' : 'Export Report'}</span>
                         <span className="md:hidden">Export</span>
                     </Button>
                 </div>
