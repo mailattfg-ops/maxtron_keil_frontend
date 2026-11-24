@@ -139,7 +139,7 @@ export default function RouteCollectionReportPage() {
 
         // Main Headers (Row 1)
         const mainHeader = [
-            'ROUTE NAME', 'VEHICLE NUMBER', 'DRIVER NAME', 'SPARE DRIVER NAME', 'SUPERVISOR NAME', 
+            'DATE', 'ROUTE NAME', 'VEHICLE NUMBER', 'DRIVER NAME', 'SPARE DRIVER NAME', 'SUPERVISOR NAME', 
             'STARTING TIME', 'ENDING TIME', 'KM RUN', 
             'TOTAL HCE', '', '', // 9, 10, 11
             'VISITED HCE', '', '', // 12, 13, 14
@@ -151,7 +151,7 @@ export default function RouteCollectionReportPage() {
         
         // Sub Headers (Row 2)
         const subHeader = [
-            '', '', '', '', '', '', '', '',
+            '', '', '', '', '', '', '', '', '',
             'BEDDED', 'OTHERS', 'TOTAL',
             'BEDDED', 'OTHERS', 'TOTAL',
             '', '', '', '',
@@ -172,8 +172,8 @@ export default function RouteCollectionReportPage() {
                     right: { style: 'thin' }
                 };
                 
-                // Color for COLLECTION (Col 15)
-                if (colNumber === 15) {
+                // Color for COLLECTION (Col 16)
+                if (colNumber === 16) {
                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } }; // Yellow
                 } else if (idx === 0) {
                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
@@ -182,12 +182,12 @@ export default function RouteCollectionReportPage() {
         });
 
         // Merging Cells for Row 1
-        worksheet.mergeCells('I1:K1'); // TOTAL HCE
-        worksheet.mergeCells('L1:N1'); // VISITED HCE
-        worksheet.mergeCells('S1:U1'); // MISSED
+        worksheet.mergeCells('J1:L1'); // TOTAL HCE
+        worksheet.mergeCells('M1:O1'); // VISITED HCE
+        worksheet.mergeCells('T1:V1'); // MISSED
         
         // Vertical Merge for fixed headers
-        ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'O', 'P', 'Q', 'R', 'V'].forEach(col => {
+        ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'P', 'Q', 'R', 'S', 'W'].forEach(col => {
             worksheet.mergeCells(`${col}1:${col}2`);
         });
 
@@ -226,6 +226,7 @@ export default function RouteCollectionReportPage() {
             const missed_others = assigned_others - visited_others;
 
             const rowData = [
+                String(batch.collection_date || '').slice(0, 10).split('-').reverse().join('-') || '-', // DD-MM-YYYY
                 batch.route?.route_name || 'N/A',
                 batch.registration_number || 'N/A',
                 batch.driver_name || 'N/A',
