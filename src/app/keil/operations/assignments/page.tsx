@@ -47,17 +47,31 @@ const ROUTE_API = `${API_BASE}/api/keil/operations/routes`;
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+/** This month in India, 'YYYY-MM'. */
+const thisMonth = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 7);
+/** 'YYYY-MM' or 'YYYY-MM-01' → "December 2026". */
+const monthLabel = (m: string) => new Date(`${m.slice(0, 7)}-01T00:00:00Z`).toLocaleString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
 function RouteAssignmentsContent() {
     const searchParams = useSearchParams();
     const routeId = searchParams.get('route_id');
     const { success, error } = useToast();
     const { confirm } = useConfirm();
-    const { hasPermission, loading: permissionLoading } = usePermission();
+    const { hasPermission, loading: permissionLoading, user, isAdmin } = usePermission();
+
+    // Route lists are kept per month. Admin and Manager Operations start each
+    // month's plan and may change past months; others change this month and later.
+    const isPlanner = isAdmin || (user?.role_name || user?.user_types?.name || '').trim().toLowerCase() === 'manager operations';
+    const [month, setMonth] = useState(thisMonth());
+    const [planMonth, setPlanMonth] = useState(''); // the month whose plan is shown ('YYYY-MM-01')
+    const notStarted = Boolean(planMonth) && planMonth.slice(0, 7) !== month; // the chosen month shows another month's plan
+    const isPast = month < thisMonth();
+    const locked = notStarted || (isPast && !isPlanner);
 
     const canView = hasPermission('prod_assignment_view', 'view');
-    const canCreate = hasPermission('prod_assignment_view', 'create');
-    const canEdit = hasPermission('prod_assignment_view', 'edit');
-    const canDelete = hasPermission('prod_assignment_view', 'delete');
+    const canCreate = hasPermission('prod_assignment_view', 'create') && !locked;
+    const canEdit = hasPermission('prod_assignment_view', 'edit') && !locked;
+    const canDelete = hasPermission('prod_assignment_view', 'delete') && !locked;
 
     const [route, setRoute] = useState<any>(null);
     const [routes, setRoutes] = useState<any[]>([]);
@@ -80,21 +94,28 @@ function RouteAssignmentsContent() {
         hce_id: '',
         collection_type: 'Daily',
         collection_days: DAYS,
-        remarks: ''
+        remarks: '',
+        position: '' // SL NO in its days' list; empty adds it at the end
     });
+    // Ticked facilities, to move to another route
+    const [picked, setPicked] = useState<Set<string>>(new Set());
+    const [moveTarget, setMoveTarget] = useState('');
+    const [movePosition, setMovePosition] = useState('');
 
     useEffect(() => {
         fetchRoutesAndHces();
     }, []);
 
     useEffect(() => {
+        setPicked(new Set());
         if (selectedRouteId) {
             fetchAssignments(selectedRouteId);
         } else {
             setRoute(null);
             setAssignments([]);
+            setPlanMonth('');
         }
-    }, [selectedRouteId]);
+    }, [selectedRouteId, month]);
 
     const fetchRoutesAndHces = async () => {
         const token = localStorage.getItem('token');
@@ -136,7 +157,7 @@ function RouteAssignmentsContent() {
         try {
             const [rRes, aRes] = await Promise.all([
                 fetch(`${ROUTE_API}/${id}`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(`${ASSIGN_API}?route_id=${id}`, { headers: { 'Authorization': `Bearer ${token}` } })
+                fetch(`${ASSIGN_API}?route_id=${id}&month=${month}`, { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
             const rData = await rRes.json();
@@ -147,7 +168,12 @@ function RouteAssignmentsContent() {
             } else {
                 error("Failed to load route details.");
             }
-            if (aData.success) setAssignments(aData.data);
+            if (aData.success) {
+                setAssignments(aData.data);
+                setPlanMonth(aData.plan_month || '');
+            } else {
+                error(aData.message || 'Could not load the route list.');
+            }
         } catch (err) {
             console.error('Error fetching record details:', err);
             error("Connection failed while fetching mapping data.");
@@ -163,8 +189,10 @@ function RouteAssignmentsContent() {
         try {
             const payload = {
                 ...assignmentForm,
+                position: Number(assignmentForm.position) || null,
                 route_id: selectedRouteId,
-                company_id: route?.company_id
+                company_id: route?.company_id,
+                plan_month: month
             };
             
             if (!payload.company_id || !payload.route_id) {
@@ -198,7 +226,7 @@ function RouteAssignmentsContent() {
             const res = await fetch(`${ASSIGN_API}/${editingAssignment.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(assignmentForm)
+                body: JSON.stringify((({ position, ...rest }) => rest)(assignmentForm)) // a link keeps its place when edited
             });
             const data = await res.json();
             if (data.success) {
@@ -217,7 +245,7 @@ function RouteAssignmentsContent() {
     };
 
     const handleRemove = async (id: string) => {
-        if (await confirm({ message: "Remove this HCE from the route?" })) {
+        if (await confirm({ message: `Remove this HCE from the route in the ${monthLabel(month)} plan? The SL NOs after it move up to close the gap.` })) {
             const token = localStorage.getItem('token');
             try {
                 const res = await fetch(`${ASSIGN_API}/${id}`, {
@@ -228,6 +256,8 @@ function RouteAssignmentsContent() {
                 if (data.success) {
                     success("HCE unlinked from route.");
                     fetchAssignments(selectedRouteId);
+                } else {
+                    error(data.message || 'Could not remove the facility.');
                 }
             } catch (err: any) {
                 error(err.message);
@@ -257,7 +287,7 @@ function RouteAssignmentsContent() {
         const picked = bulkPlan.filter((b, i) => bulkPicked.has(i));
         const names = picked.map(b => `${b.target.route_name} ${b.days.map(d => d.slice(0, 3)).join(' & ')}`);
         const newHces = picked.reduce((n, b) => n + b.toRegister.length, 0);
-        if (!(await confirm({ message: `Replace these lists with the sheet's lists, in the sheet's order: ${names.join(', ')}. Each becomes the route's whole list for its days: facilities on that route for those days are taken off them first, so none is listed twice; their other days stay.${newHces ? ` ${newHces} facilities not in the HCE Registry are added to it, with the sheet's name and AFF NO.` : ''}` }))) return;
+        if (!(await confirm({ message: `${monthLabel(month)} plan: replace these lists with the sheet's lists, in the sheet's order: ${names.join(', ')}. Each becomes the route's whole list for its days: facilities on that route for those days are taken off them first, so none is listed twice; their other days stay.${newHces ? ` ${newHces} facilities not in the HCE Registry are added to it, with the sheet's name and AFF NO.` : ''}` }))) return;
         const token = localStorage.getItem('token');
         setSubmitting(true);
         let added = 0;
@@ -272,7 +302,8 @@ function RouteAssignmentsContent() {
                         company_id: b.target.company_id,
                         collection_days: b.days,
                         collection_type: frequencyOf(b.days),
-                        items: b.items
+                        items: b.items,
+                        plan_month: month
                     })
                 });
                 const data = await res.json();
@@ -290,6 +321,80 @@ function RouteAssignmentsContent() {
             setSubmitting(false);
             fetchRoutesAndHces(); // newly registered HCEs
             if (selectedRouteId) fetchAssignments(selectedRouteId);
+        }
+    };
+
+    /** Start the chosen month's plan: every route's latest list is copied into it. */
+    const startMonth = async () => {
+        if (!route?.company_id) return;
+        if (!(await confirm({ message: `Start the ${monthLabel(month)} route plan? Every route's list from ${monthLabel(planMonth)} is copied into ${monthLabel(month)}, where you can then move, add or remove facilities. Earlier months stay as they are.` }))) return;
+        setSubmitting(true);
+        try {
+            const res = await fetch(`${ASSIGN_API}/start-month`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ company_id: route.company_id, plan_month: month })
+            });
+            const data = await res.json();
+            if (data.success) success(`${monthLabel(month)} plan started: ${data.data.copied} route links copied.`);
+            else error(data.message || 'Could not start the month.');
+        } catch (err: any) {
+            error(err.message);
+        } finally {
+            setSubmitting(false);
+            fetchAssignments(selectedRouteId);
+        }
+    };
+
+    /** Undo a month started by mistake: its plan is removed and the month shows the one before it again. */
+    const undoMonth = async () => {
+        if (!route?.company_id) return;
+        if (!(await confirm({ message: `Undo the start of the ${monthLabel(month)} plan? Its route lists, and any changes made in them, are removed for every route; ${monthLabel(month)} then shows the previous month's plan again. Earlier months stay as they are.` }))) return;
+        setSubmitting(true);
+        try {
+            const res = await fetch(`${ASSIGN_API}/undo-month`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ company_id: route.company_id, plan_month: month })
+            });
+            const data = await res.json();
+            if (data.success) success(`The ${monthLabel(month)} plan start was undone.`);
+            else error(data.message || 'Could not undo the month.');
+        } catch (err: any) {
+            error(err.message);
+        } finally {
+            setSubmitting(false);
+            fetchAssignments(selectedRouteId);
+        }
+    };
+
+    /** Move the ticked facilities to another route, keeping their days, from SL NO `movePosition` on (or at the end). */
+    const moveSelected = async () => {
+        const target = routes.find(r => r.id === moveTarget);
+        if (!target || !picked.size) return;
+        const at = Number(movePosition) || null;
+        if (!(await confirm({ message: `Move ${picked.size} ${picked.size === 1 ? 'facility' : 'facilities'} from ${route?.route_name} to ${target.route_name} in the ${monthLabel(month)} plan${at ? `, from SL NO ${at}` : ', at the end of its list'}? They keep their collection days.` }))) return;
+        setSubmitting(true);
+        try {
+            const res = await fetch(`${ASSIGN_API}/move`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ ids: [...picked], route_id: target.id, position: at })
+            });
+            const data = await res.json();
+            if (data.success) {
+                success(`Moved ${data.data.moved} to ${target.route_name}.`);
+                setPicked(new Set());
+                setMoveTarget('');
+                setMovePosition('');
+            } else {
+                error(data.message || 'Could not move the facilities.');
+            }
+        } catch (err: any) {
+            error(err.message);
+        } finally {
+            setSubmitting(false);
+            fetchAssignments(selectedRouteId);
         }
     };
 
@@ -349,7 +454,8 @@ function RouteAssignmentsContent() {
             hce_id: '',
             collection_type: 'Daily',
             collection_days: DAYS,
-            remarks: ''
+            remarks: '',
+            position: ''
         });
         setFacilitySearch('');
         setIsAssigning(false);
@@ -493,7 +599,42 @@ function RouteAssignmentsContent() {
                                 <span className="text-[10px] md:text-xs font-bold text-muted-foreground">{route.branch_name}</span>
                             </div>
                         )}
+                        <label className="flex items-center gap-2 w-full sm:w-auto">
+                            <Calendar className="w-4 h-4 text-primary/60" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Plan month</span>
+                            <Input
+                                type="month"
+                                value={month}
+                                onChange={e => { if (/^\d{4}-\d{2}$/.test(e.target.value)) setMonth(e.target.value); }}
+                                className="h-10 w-[160px] border-primary/20 font-bold text-xs"
+                            />
+                        </label>
                     </div>
+                    {selectedRouteId && planMonth && !notStarted && isPlanner && month > thisMonth() && (
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border border-primary/15 bg-primary/5 px-4 py-3 text-xs font-bold text-primary">
+                            <span className="flex-1">The {monthLabel(month)} plan is started. Started by mistake? It can be undone until collections are saved in {monthLabel(month)}.</span>
+                            <Button type="button" size="sm" variant="outline" onClick={undoMonth} disabled={submitting} className="h-8 rounded-full px-4 font-bold uppercase tracking-wider text-[10px] border-primary/30">
+                                Undo {monthLabel(month)} start
+                            </Button>
+                        </div>
+                    )}
+                    {selectedRouteId && planMonth && (notStarted || isPast) && (
+                        <div className={`flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border px-4 py-3 text-xs font-bold ${notStarted ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-primary/15 bg-primary/5 text-primary'}`}>
+                            <span className="flex-1">
+                                {notStarted && month > planMonth.slice(0, 7) && <>The {monthLabel(month)} plan has not been started yet. Showing the {monthLabel(planMonth)} plan, view only.</>}
+                                {notStarted && month < planMonth.slice(0, 7) && <>No route plan was kept before {monthLabel(planMonth)}. Showing that plan, view only.</>}
+                                {!notStarted && isPast && (isPlanner
+                                    ? <>{monthLabel(month)} is a past month. Changes here only change the {monthLabel(month)} plan.</>
+                                    : <>{monthLabel(month)} is a past month: view only. Admin and Manager Operations can change it.</>)}
+                            </span>
+                            {notStarted && month > planMonth.slice(0, 7) && isPlanner && (
+                                <Button type="button" size="sm" onClick={startMonth} disabled={submitting} className="h-8 rounded-full px-4 font-bold uppercase tracking-wider text-[10px]">
+                                    {submitting ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Plus className="w-3.5 h-3.5 mr-1.5" />}
+                                    Start {monthLabel(month)} plan
+                                </Button>
+                            )}
+                        </div>
+                    )}
                     {selectedRouteId && (
                         <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1">List</span>
@@ -550,6 +691,7 @@ function RouteAssignmentsContent() {
                             </Button>
                         </div>
                         <CardDescription>
+                            Uploads into the <b>{monthLabel(month)}</b> plan (change it with Plan month above).
                             Upload the route sheet (.xlsx): a sheet per set of days, each route as SL NO, HCF NAME and AFF NO columns
                             under a title such as &ldquo;EKM 1 MONDAY&amp;THURSDAY&rdquo;. Each ticked list replaces that route&rsquo;s list
                             for those days, in the sheet&rsquo;s order. Lists for other days stay as they are.
@@ -785,6 +927,22 @@ function RouteAssignmentsContent() {
                                         </SelectContent>
                                     </Select>
                                 </div>
+                                {!editingAssignment && (
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider pl-1">Position (SL NO)</label>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            value={assignmentForm.position}
+                                            onChange={e => setAssignmentForm({ ...assignmentForm, position: e.target.value })}
+                                            placeholder="Empty: at the end of the list"
+                                            className="h-10 border-primary/20 font-bold"
+                                        />
+                                        <p className="text-[10px] text-muted-foreground pl-1">
+                                            Its place in the list for the chosen days ({monthLabel(month)} plan). The facility now at that number, and those after it, move one down.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="space-y-3">
@@ -846,10 +1004,40 @@ function RouteAssignmentsContent() {
                     </CardContent>
                 </Card>
             ) : (
+                <>
+                {canEdit && picked.size > 0 && (
+                    <div className="flex flex-col md:flex-row md:items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                        <span className="text-xs font-bold text-primary flex-1">
+                            {picked.size} ticked. Move to another route ({monthLabel(month)} plan); they keep their collection days.
+                        </span>
+                        <select
+                            value={moveTarget}
+                            onChange={e => setMoveTarget(e.target.value)}
+                            className="h-9 rounded-md border border-primary/20 bg-white px-2 text-xs font-bold"
+                        >
+                            <option value="">Move to route...</option>
+                            {routes.filter(r => r.id !== selectedRouteId).map(r => (
+                                <option key={r.id} value={r.id}>{r.route_name} ({r.route_code})</option>
+                            ))}
+                        </select>
+                        <Input
+                            type="number"
+                            min={1}
+                            value={movePosition}
+                            onChange={e => setMovePosition(e.target.value)}
+                            placeholder="From SL NO (empty: at the end)"
+                            className="h-9 w-full md:w-[210px] border-primary/20 text-xs font-bold"
+                        />
+                        <Button type="button" size="sm" onClick={moveSelected} disabled={!moveTarget || submitting} className="h-9 rounded-full px-5 font-bold uppercase tracking-wider text-[10px]">
+                            {submitting ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <MapIcon className="w-3.5 h-3.5 mr-1.5" />} Move
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setPicked(new Set())} className="h-9 text-xs">Clear</Button>
+                    </div>
+                )}
                 <TableView
                     key={list}
                     title="Mapped Facilities"
-                    description={`Collection sequence for ${route?.route_name}${list ? `, ${list} list` : ''}${canEdit ? '. Type a new number to move a facility.' : ''}`}
+                    description={`Collection sequence for ${route?.route_name}, ${monthLabel(planMonth || month)} plan${list ? `, ${list} list` : ''}${canEdit ? '. Type a new number to move a facility.' : ''}`}
                     headers={['HCE / Place', 'Type', 'Collection Days', 'Remarks', 'Actions']}
                     data={shown}
                     initialRowsPerPage={100}
@@ -859,6 +1047,19 @@ function RouteAssignmentsContent() {
                         <tr key={a.id} className="hover:bg-primary/[0.02] transition-colors group border-b last:border-0 border-slate-100">
                             <td className="px-6 py-6">
                                 <div className="flex items-center gap-3">
+                                    {canEdit && (
+                                        <input
+                                            type="checkbox"
+                                            aria-label={`Tick ${a.keil_hces?.hce_name || 'facility'} to move it to another route`}
+                                            checked={picked.has(a.id)}
+                                            onChange={() => setPicked(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(a.id)) next.delete(a.id); else next.add(a.id);
+                                                return next;
+                                            })}
+                                            className="w-4 h-4 accent-primary"
+                                        />
+                                    )}
                                     {canEdit ? (
                                         <input
                                             key={`${a.id}-${numberOf(a)}`}
@@ -906,7 +1107,8 @@ function RouteAssignmentsContent() {
                                                 hce_id: a.hce_id,
                                                 collection_type: a.collection_type || 'Daily',
                                                 collection_days: a.collection_days || [],
-                                                remarks: a.remarks || ''
+                                                remarks: a.remarks || '',
+                                                position: ''
                                             });
                                         }}>
                                             <Edit className="w-4 h-4" />
@@ -922,6 +1124,7 @@ function RouteAssignmentsContent() {
                         </tr>
                     )}
                 />
+                </>
             )}
             </>
             )}

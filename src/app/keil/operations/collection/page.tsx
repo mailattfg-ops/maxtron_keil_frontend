@@ -286,8 +286,9 @@ export default function DailyCollectionEntryPage() {
         const dateToCheck = targetDate || headerData.collection_date;
 
         try {
-            // 1. Fetch assigned HCEs for the route
-            const res = await fetch(`${ASSIGN_API}?route_id=${routeId}`, {
+            // 1. Fetch assigned HCEs for the route, from the plan of the collection date's month
+            const month = /^\d{4}-\d{2}/.test(dateToCheck || '') ? `&month=${dateToCheck.slice(0, 7)}` : '';
+            const res = await fetch(`${ASSIGN_API}?route_id=${routeId}${month}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
